@@ -6,6 +6,11 @@ from typing import Optional
 @dataclass
 class Component(ABC): pass
 
+@dataclass
+class State(Component):
+    current: str = 'idle'
+    states: list = field(default_factory=set)
+
 @dataclass 
 class Movable(Component):
     speed: float = 1
@@ -21,8 +26,10 @@ class Biochemistry(Component):
 class Eatable(Component):
     nutrition: int
 
-@dataclass 
-class Breedable(Component): pass
+@dataclass
+class Breedable(Component):
+    fertility: int = 100
+    cooldown: int = 10
 
 @dataclass
 class Phenotype(Component):
@@ -30,7 +37,7 @@ class Phenotype(Component):
 
 @dataclass 
 class Vision(Component):
-    radius: int
+    radius: int = 4
     visibles: set[Entity] = field(default_factory=list)
 
 class Entity:

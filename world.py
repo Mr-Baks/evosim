@@ -151,9 +151,9 @@ class World:
 
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         free_cells = []
-        offstes = self._get_offsets(radius=radius)
+        offsets = self._get_offsets(radius=radius)
 
-        for (dx, dy) in offstes:
+        for (dx, dy) in offsets:
             nx, ny = entity.x + dx, entity.y + dy
             if self.get_entity(nx, ny) is None:
                 free_cells.append((nx, ny))
@@ -162,9 +162,9 @@ class World:
     
     def get_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         cells = []
-        offstes = self._get_offsets(radius=radius)
+        offsets = self._get_offsets(radius=radius)
 
-        for (dx, dy) in offstes:
+        for (dx, dy) in offsets:
             cells.append((entity.x + dx, entity.y + dy))
 
         return cells

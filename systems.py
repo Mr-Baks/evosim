@@ -7,6 +7,11 @@ from commands import *
 def command_system(entities: set[Entity], world: World):
     for e in entities:
         queue = e.get_component(CommandQueue)
+        state = e.get_component(State)
+        ql = len(queue.queue)
+        if ql > 10:
+            print(queue.queue)
+        else: print(ql)
         command = queue.running
         if command:
             command.execute(e, world)
@@ -15,6 +20,8 @@ def command_system(entities: set[Entity], world: World):
                 if c.is_ready(e, world):
                     queue.running = c
                     c.status = CommandStatus.RUNNING
+                    if c.target_state and state: 
+                        state.states.add(c.target_state)
                     queue.queue.remove(c)
                     break
 
@@ -27,6 +34,7 @@ def biochemistry_system(entities: set[Entity], world: World):
     entities = world.index.get_with(Biochemistry, CommandQueue)
     for e in entities:
         bio: Biochemistry = e.get_component(Biochemistry)
+        breedable = e.get_component(Breedable)
         queue = e.get_component(CommandQueue)
         
         if not queue.running or isinstance(queue.running, SleepCommand):
@@ -35,6 +43,9 @@ def biochemistry_system(entities: set[Entity], world: World):
                 bio.health = max(bio.health - 1, 0)
         
         bio.hunger = max(bio.hunger - 1, 0)
+
+        if breedable:
+            breedable.cooldown = max(breedable.cooldown - 1, 0)
 
         if bio.hunger == 0:
             bio.health = max(bio.health - 1, 0)
@@ -45,31 +56,43 @@ def biochemistry_system(entities: set[Entity], world: World):
 def decision_system(entities: set[Entity], world: World):
     for e in entities:
         queue: CommandQueue = e.get_component(CommandQueue)
+        state: State = e.get_component(State)
         vision: Vision = e.get_component(Vision)
         bio: Biochemistry = e.get_component(Biochemistry)
 
-        if bio and vision:
-            if bio.hunger < 40:
-                food = []
+        if not (bio and vision):
+            continue
 
-                for ve in vision.visibles:
-                    if ve.has_component(Eatable):
-                        food.append(ve)
+        if bio.hunger < 40 and 'seeking_food' not in state.states and 'eating' not in state.states:
+            food_candidates = [ve for ve in vision.visibles if ve.has_component(Eatable)]
+            if food_candidates:
+                food_candidates.sort(key=lambda f: abs(e.x - f.x) + abs(e.y - f.y))
+                for f in food_candidates:
+                    free_cells = world.get_free_cells_near(f)
+                    if free_cells:
+                        tx, ty = free_cells[0]
+                        push_command(e, world, MoveToTargetCommand(x=tx, y=ty, emergency=80, target_state='seeking_food'))
+                        push_command(e, world, EatCommand(target_x=f.x, target_y=f.y, emergency=81, target_state='eating'))
+                        break
+                else:
+                    push_command(e, world, WanderCommand(emergency=79, target_state='seeking_food'))
+            else:
+                push_command(e, world, WanderCommand(emergency=79, target_state='seeking_food'))
 
-                if food:
-                    food.sort(key=lambda f: abs(e.x - f.x) + abs(e.y - f.y))
-                    for f in food:
-                        free_cells = world.get_free_cells_near(f)
-                        if free_cells: 
-                            tx, ty = free_cells[0]
-                            fx, fy = f.x, f.y
-                            break
-                    else: return # fallback if all food is unreachable
-                    push_command(e, world, MoveToTargetCommand(x=tx, y=ty, emergency=80))
-                    push_command(e, world, EatCommand(target_x=fx, target_y=fy, emergency=81))
-                else: 
-                    push_command(e, world, WanderCommand(emergency=79))
-            elif bio.energy < 55: 
-                push_command(e, world, SleepCommand(ticks_to_sleep=2, emergency=20))
-        if not queue.running:
-            push_command(e, world, WanderCommand(priority=-1))
+        elif bio.energy < 55 and 'sleeping' not in state.states:
+            push_command(e, world, SleepCommand(ticks_to_sleep=2, emergency=20, target_state='sleeping'))
+
+        elif bio.energy > 70 and bio.hunger > 70 and (not queue.running or queue.running.emergency == 0) and 'seeking_partner' not in state.states and 'breeding' not in state.states:
+            partners = [ve for ve in vision.visibles if ve.has_component(Breedable) and ve is not e]
+            if partners:
+                partners.sort(key=lambda p: abs(e.x - p.x) + abs(e.y - p.y))
+                for p in partners:
+                    free_cells = world.get_free_cells_near(p)
+                    if free_cells:
+                        tx, ty = free_cells[0]
+                        push_command(e, world, MoveToTargetCommand(x=tx, y=ty, emergency=15, target_state='seeking_partner'))
+                        push_command(e, world, MateCommand(partner=p, emergency=16, target_state='breeding'))
+                        break
+
+        if not queue.running and 'wandering' not in state.states:
+            push_command(e, world, WanderCommand(priority=-1, target_state='wandering'))

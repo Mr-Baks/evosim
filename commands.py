@@ -22,6 +22,7 @@ class Command(ABC):
     priority: int = 0
     status: CommandStatus = CommandStatus.PENDING
     emergency: int = 0
+    target_state: Optional[str] = None
 
     @abstractmethod
     def execute(self, entity: Entity, world: World) -> CommandStatus:
@@ -38,9 +39,13 @@ class Command(ABC):
 
     def complete(self, entity: Entity, status=CommandStatus.COMPLETED) -> None:
         queue = entity.get_component(CommandQueue)
+        state = entity.get_component(State)
         if queue and queue.running == self:
             queue.running = None
             self.status = status
+            if state:
+                state.current = 'idle'
+                state.states.discard(self.target_state)
 
 @dataclass
 class CommandQueue(Component):
@@ -49,13 +54,20 @@ class CommandQueue(Component):
 
 def push_command(entity: Entity, world: World, command: Command) -> None:
     queue = entity.get_component(CommandQueue)
+    state = entity.get_component(State)
     if not queue or queue.running is command: return
+
+    if state and command.target_state:
+        state.states.add(command.target_state)
 
     running_cmd = queue.running
     if running_cmd and command.emergency > running_cmd.emergency and command.is_ready(entity, world):
         running_cmd.complete(entity, status=CommandStatus.INTERRUPTED)
         running_cmd.on_interruption(entity)
         queue.running = command
+        command.status = CommandStatus.RUNNING
+        if command.target_state and state: 
+            state.current = command.target_state
         return
 
     for i, cmd in enumerate(queue.queue):
@@ -161,6 +173,37 @@ class WanderCommand(Command):
                 ty = max(0, min(world.height - 1, entity.y + dy))
 
         self.complete(entity)
-        command = MoveToTargetCommand(x=tx, y=ty, priority=self.priority, emergency=self.emergency)
+        command = MoveToTargetCommand(x=tx, y=ty, priority=self.priority, emergency=self.emergency, target_state=self.target_state)
         push_command(entity, world, command)
         command.execute(entity, world)
+
+def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETICS!!!
+    child = Entity()
+    
+    components = set(parent1.components_dict.keys()) | set(parent2.components_dict.keys())
+    for c in components:
+        child.add_component(c())
+
+    return child
+
+@dataclass
+class MateCommand(Command): 
+    partner: Entity = None
+
+    def is_ready(self, entity, world):
+        if abs(entity.x - self.partner.x) + abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0:
+            print('NO SEX')
+            return False
+        return True
+
+    def execute(self, entity, world):
+        print('SEX')
+        print('Z' * 1200)
+        child = create_child(entity, self.partner, world)
+        free_cells = world.get_free_cells_near(entity)
+        if free_cells and child:
+            x, y = free_cells[0]
+            world.place_entity(child, x, y)
+        entity.get_component(Breedable).cooldown = 40
+        self.partner.get_component(Breedable).cooldown = 40
+        self.complete(entity)
