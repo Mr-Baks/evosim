@@ -34,6 +34,8 @@ class Simulation:
                 if e is None: out += '.'
                 elif e.has_component(Movable): out += 'C'
                 elif e.has_component(Eatable): out += 'f'
+                elif e.has_component(Plant): out += 'P'
+                else: out += '?'
             out += '\n'
         print(out)
 

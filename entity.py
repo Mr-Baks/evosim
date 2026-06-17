@@ -29,7 +29,7 @@ class Eatable(Component):
 @dataclass
 class Breedable(Component):
     fertility: int = 100
-    cooldown: int = 10
+    cooldown: int = 30
 
 @dataclass
 class Phenotype(Component):
@@ -39,6 +39,13 @@ class Phenotype(Component):
 class Vision(Component):
     radius: int = 4
     visibles: set[Entity] = field(default_factory=list)
+
+@dataclass 
+class Plant(Component):
+    energy: int = 0
+    energy_increase: int = 2
+    fructify_treshold: int = 80
+    fruit_nutrition: int = 25
 
 class Entity:
     def __init__(self, x: int = 0, y: int = 0):

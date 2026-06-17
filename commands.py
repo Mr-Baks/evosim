@@ -97,7 +97,7 @@ class EatCommand(Command):
             world.event_bus.emit(EatEvent(source=entity, nutrition=eatable.nutrition))
             self.complete(entity)
         else:
-            self.complete(status=CommandStatus.FAILED)
+            self.complete(entity, status=CommandStatus.FAILED)
 
 @dataclass
 class DeathCommand(Command):
@@ -192,13 +192,10 @@ class MateCommand(Command):
 
     def is_ready(self, entity, world):
         if abs(entity.x - self.partner.x) + abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0:
-            print('NO SEX')
             return False
         return True
 
     def execute(self, entity, world):
-        print('SEX')
-        print('Z' * 1200)
         child = create_child(entity, self.partner, world)
         free_cells = world.get_free_cells_near(entity)
         if free_cells and child:

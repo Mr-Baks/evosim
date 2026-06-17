@@ -2,16 +2,13 @@ from commands import CommandQueue, CommandStatus
 from entity import *
 from world import World
 from commands import *
+import random
 
 
 def command_system(entities: set[Entity], world: World):
     for e in entities:
         queue = e.get_component(CommandQueue)
         state = e.get_component(State)
-        ql = len(queue.queue)
-        if ql > 10:
-            print(queue.queue)
-        else: print(ql)
         command = queue.running
         if command:
             command.execute(e, world)
@@ -52,6 +49,17 @@ def biochemistry_system(entities: set[Entity], world: World):
 
         if bio.health == 0:
             push_command(e, world, DeathCommand(emergency=100))
+
+def plant_system(entities: set[Entity], world: World):
+    for e in entities:
+        plant: Plant = e.get_component(Plant)
+        plant.energy = min(plant.energy + plant.energy_increase, 180)
+        if plant.energy > plant.fructify_treshold:
+            free_cells = world.get_cells_near(e)
+            if free_cells:
+                fruit = Entity().add_component(Eatable(nutrition=plant.fruit_nutrition))
+                plant.energy -= plant.fructify_treshold
+                world.place_entity(fruit, *random.choice(free_cells))
 
 def decision_system(entities: set[Entity], world: World):
     for e in entities:
