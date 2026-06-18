@@ -44,17 +44,17 @@ def on_move(event: MoveEvent):
 
 @dataclass
 class SleepEvent(Event):
-    energy_increase: int = 15
+    energy_increase: int = 30
 
 def on_sleep(event: SleepEvent):
     bio = event.source.get_component(Biochemistry)
-    if bio: bio.energy = max(bio.energy + event.energy_increase, 100)
+    if bio: bio.energy = max(bio.energy + event.energy_increase, 200)
 
 @dataclass
 class EatEvent(Event):
-    nutrition: int = 20
+    nutrition: int = 35
 
 def on_eat(event: EatEvent):
     bio = event.source.get_component(Biochemistry)
     if bio:
-        bio.hunger = max(event.nutrition + bio.hunger, 100)
+        bio.hunger = max(event.nutrition + bio.hunger, 200)

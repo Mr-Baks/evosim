@@ -7,8 +7,8 @@ from event_bus import Event, EventBus
 from systems import *
 
 
-def make_creature(x, y, world: World):
-    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(3)).add_component(CommandQueue()).add_component(State()).add_component(Breedable(cooldown=0))
+def make_creature(x, y, world: World, color=(80, 120, 200)):
+    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(3)).add_component(CommandQueue()).add_component(State()).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=color))
     world.place_entity(e, x, y)
 
 def make_food(x, y, world: World, nutrition=20):
@@ -16,7 +16,7 @@ def make_food(x, y, world: World, nutrition=20):
     world.place_entity(e, x, y)   
 
 def make_plant(x, y, world: World):
-    e = Entity().add_component(Plant(fructify_treshold=random.randint(70, 85)))
+    e = Entity().add_component(Plant(fructify_treshold=random.randint(70, 90))).add_component(Render(symbol='P', color=(0, 200, 10)))
     world.place_entity(e, x, y)
 
 s = Simulation(10, 10, (200, 30))
@@ -43,7 +43,7 @@ for x in range(s.world.width):
     for y in range(s.world.height):
         if x % 15 == 0 and y % 15 == 0:
             make_creature(x, y, s.world)
-            make_creature(x - 1, y, s.world)
+            make_creature(x - 1, y, s.world, color=(10, 180, 100))
 
         if random.random() > 0.87 and not s.world.get_entity(x, y) and (x % 5 == 3 and y % 5 >= 3):
             make_plant(x, y, s.world)

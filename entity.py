@@ -11,6 +11,12 @@ class State(Component):
     current: str = 'idle'
     states: list = field(default_factory=set)
 
+@dataclass
+class Render(Component):
+    symbol: str = '?'
+    color: tuple[int, int, int] = (255, 255, 255)
+    is_visible: bool = True
+    
 @dataclass 
 class Movable(Component):
     speed: float = 1
@@ -30,10 +36,6 @@ class Eatable(Component):
 class Breedable(Component):
     fertility: int = 100
     cooldown: int = 30
-
-@dataclass
-class Phenotype(Component):
-    color: tuple[int, int, int]
 
 @dataclass 
 class Vision(Component):

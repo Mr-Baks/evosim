@@ -183,6 +183,17 @@ def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETIC
     components = set(parent1.components_dict.keys()) | set(parent2.components_dict.keys())
     for c in components:
         child.add_component(c())
+    
+    render = child.get_component(Render)
+    render.symbol = 'C'
+
+    r1, g1, b1 = parent1.get_component(Render).color
+    r2, g2, b2 = parent2.get_component(Render).color
+    r = max(0, min(255, int((r1 + r2) / 2 + random.randint(-10, 10))))
+    g = max(0, min(255, int((g1 + g2) / 2 + random.randint(-10, 10))))
+    b = max(0, min(255, int((b1 + b2) / 2 + random.randint(-10, 10))))
+
+    render.color = (r, g, b)
 
     return child
 

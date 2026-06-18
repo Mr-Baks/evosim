@@ -4,9 +4,10 @@ import time
 
 
 class Simulation:
-    def __init__(self, tickspeed: int, fps: int, world_size: tuple[int, int]):
+    def __init__(self, tickspeed: int, fps: int, world_size: tuple[int, int], background_sym: str = '.'):
         self.tickspeed = tickspeed
         self.fps = fps
+        self.background_sym = background_sym
         self.world = World(width=world_size[0], height=world_size[1])
         self.systems: list[tuple[int, frozenset[type[Component]], callable]] = []
         self.on_tick_callbacks: list[callable] = []
@@ -30,17 +31,22 @@ class Simulation:
     def add_on_tick(self, callback: callable) -> None:
         self.on_tick_callbacks.append(callback)
         
-    def render(self): # shitty hardcode TODO
-        out = ''
+    def render(self) -> list[list[str]]: 
+        screen = [[self.background_sym for _ in range(self.world.width)] for _ in range(self.world.height)]
+        renderables = self.world.index.get_with(Render)
 
-        for line in self.world.cells:
-            for e in line:
-                if e is None: out += '.'
-                elif e.has_component(Movable): out += 'C'
-                elif e.has_component(Eatable): out += 'f'
-                elif e.has_component(Plant): out += 'P'
-                else: out += '?'
-            out += '\n'
+        for e in renderables:
+            render: Render = e.get_component(Render)
+            if not render.is_visible: break
+            r, g, b = render.color
+            screen[e.y][e.x] = f'\033[38;2;{r};{g};{b}m{render.symbol}\033[0m'
+
+        return screen
+
+    def print_scene(self):
+        out = ''
+        for line in self.render():
+            out += ''.join(line) + '\n'
         print(out)
 
     def run(self):
@@ -69,7 +75,7 @@ class Simulation:
                 for c in self.on_tick_callbacks:
                     c(self)
 
-            self.render()
+            self.print_scene()
             elapsed = time.time() - now
             sleep_time = frame_duration - elapsed
             if sleep_time > 0:
