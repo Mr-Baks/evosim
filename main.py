@@ -16,10 +16,10 @@ def make_food(x, y, world: World, nutrition=20):
     world.place_entity(e, x, y)   
 
 def make_plant(x, y, world: World):
-    e = Entity().add_component(Plant())
+    e = Entity().add_component(Plant(fructify_treshold=random.randint(70, 85)))
     world.place_entity(e, x, y)
 
-s = Simulation(10, 10, (50, 20))
+s = Simulation(10, 10, (200, 30))
 
 s.world.event_bus.subscribe(EatEvent, on_eat)
 s.world.event_bus.subscribe(SleepEvent, on_sleep)
@@ -31,14 +31,21 @@ s.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, 
 s.register_system(frozenset([Plant]), plant_system, priority=75)
 s.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
 
-make_creature(1, 1, s.world)
-make_creature(2, 1, s.world)
-make_creature(3, 1, s.world)
-make_creature(1, 10, s.world)
+def tick_stats(sim: Simulation):
+    food_amount = len(sim.world.index.get_with(Eatable))
+    creatures_amount = len(sim.world.index.get_with(Movable))
+
+    print(f'creatures: {creatures_amount} | food: {food_amount}')
+
+s.add_on_tick(tick_stats)
 
 for x in range(s.world.width):
     for y in range(s.world.height):
-        if random.random() > 0.9 and not s.world.get_entity(x, y) and (x % 5 < 3 and y % 5 > 3):
+        if x % 15 == 0 and y % 15 == 0:
+            make_creature(x, y, s.world)
+            make_creature(x - 1, y, s.world)
+
+        if random.random() > 0.87 and not s.world.get_entity(x, y) and (x % 5 == 3 and y % 5 >= 3):
             make_plant(x, y, s.world)
 
 s.run()

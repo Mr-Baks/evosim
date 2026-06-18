@@ -9,6 +9,7 @@ class Simulation:
         self.fps = fps
         self.world = World(width=world_size[0], height=world_size[1])
         self.systems: list[tuple[int, frozenset[type[Component]], callable]] = []
+        self.on_tick_callbacks: list[callable] = []
 
     def register_system(self, required_components: frozenset[type[Component]], system: callable, priority: int = 0) -> None:
         for i, (p, _, _) in enumerate(self.systems):
@@ -25,6 +26,9 @@ class Simulation:
             system(self.world.index.systems_cache[req_comps], self.world)
         self.world.index.locked = False
         self.world.index.flush_pending()
+
+    def add_on_tick(self, callback: callable) -> None:
+        self.on_tick_callbacks.append(callback)
         
     def render(self): # shitty hardcode TODO
         out = ''
@@ -61,6 +65,9 @@ class Simulation:
                 self.handle_systems()
                 self.world.event_bus.dispatch()
                 accumulator -= tick_duration
+
+                for c in self.on_tick_callbacks:
+                    c(self)
 
             self.render()
             elapsed = time.time() - now
