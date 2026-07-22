@@ -42,10 +42,11 @@ Communication: Events → EventBus → handlers.
 
 ### Prerequisites
 - Python 3.10+
+- Computer
 
 ### Running
 ```bash
-git clone <repo>
+git clone https://github.com/Mr-Baks/evosim.git
 cd evosim
 python main.py
 ```
