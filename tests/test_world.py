@@ -47,7 +47,7 @@ class TestQueryIndex:
         index.add_entity(e)
         index.remove_entity(e)
         assert e in index.pending_removal
-        assert e in index.entities
+        assert e in index.pending_addition  # When locked, add_entity puts in pending_addition
 
     def test_flush_pending(self):
         index = QueryIndex()
@@ -277,7 +277,7 @@ class TestWorld:
     def test_get_offsets_radius_2(self):
         world = World()
         offsets = world._get_offsets(2)
-        assert len(offsets) == 24
+        assert len(offsets) == 12
         for dx, dy in offsets:
             assert dx**2 + dy**2 <= 4
             assert not (dx == 0 and dy == 0)

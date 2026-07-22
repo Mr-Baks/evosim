@@ -6,6 +6,7 @@ from world import World
 from event_bus import *
 import math
 import random
+import heapq
 from typing import Optional
 
 
@@ -125,35 +126,105 @@ class SleepCommand(Command):
 class MoveToTargetCommand(Command):
     x: int = 0
     y: int = 0
-
+    path: list[tuple[int, int]] = field(default_factory=list)
+    path_retry_count: int = 0
+    
+    def _find_path(self, world: World, start: tuple[int, int], ignore_entity: Entity = None) -> list[tuple[int, int]]:
+        sx, sy = start
+        gx, gy = self.x, self.y
+        goal = (self.x, self.y)
+        
+        if start == goal:
+            return []
+        
+        def heuristic(x, y):
+            return abs(x - gx) + abs(y - gy)
+        
+        open_set = [(heuristic(sx, sy), 0, sx, sy)]
+        came_from = {}
+        g_score = {start: 0}
+        closed_set = set()
+        
+        while open_set:
+            _, g, x, y = heapq.heappop(open_set)
+            current = (x, y)
+            
+            if current == goal:
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                return path[::-1]
+            
+            if current in closed_set:
+                continue
+            closed_set.add(current)
+            
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx, ny = x + dx, y + dy
+                    
+                    if not (0 <= nx < world.width and 0 <= ny < world.height):
+                        continue
+                    
+                    neighbor = (nx, ny)
+                    if neighbor in closed_set:
+                        continue
+                    
+                    entity_at = world.get_entity(nx, ny)
+                    if entity_at and entity_at is not ignore_entity and neighbor != goal:
+                        continue
+                    
+                    move_cost = 1.414 if dx != 0 and dy != 0 else 1.0
+                    tentative_g = g + move_cost
+                    
+                    if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                        came_from[neighbor] = current
+                        g_score[neighbor] = tentative_g
+                        f = tentative_g + heuristic(nx, ny)
+                        heapq.heappush(open_set, (f, tentative_g, nx, ny))
+        
+        return []
+    
     def execute(self, entity: Entity, world: World):
-        possibles = world.get_free_cells_near(entity)
-
-        if not possibles:
-            self.complete(entity, status=CommandStatus.FAILED)
-            return
-        
-        if (self.x, self.y) in world.get_cells_near(entity):
-            if world.get_entity(self.x, self.y):
-                self.complete(entity, status=CommandStatus.FAILED)
-                return
-        
-        best_move = possibles[0]
-        min_dist = float('inf')
-        for (px, py) in possibles:
-            dist = abs(px - self.x) + abs(py - self.y)
-            if dist < min_dist:
-                min_dist = dist
-                best_move = (px, py)
-
-        if world.make_move(entity, *best_move):
-            world.event_bus.emit(MoveEvent(source=entity))
-        else:
-            self.complete(entity, status=CommandStatus.FAILED)
-            return
-
         if self.x == entity.x and self.y == entity.y:
             self.complete(entity)
+            return
+
+        target_entity = world.get_entity(self.x, self.y)
+        if target_entity and target_entity is not entity:
+            self.complete(entity, status=CommandStatus.FAILED)
+            return
+
+        if not self.path:
+            self.path = self._find_path(world, (entity.x, entity.y), ignore_entity=entity)
+            if not self.path:
+                self.complete(entity, CommandStatus.FAILED)
+                return
+
+        next_pos = self.path[0]
+        entity_at_next = world.get_entity(*next_pos)
+        
+        if entity_at_next and entity_at_next is not entity:
+            self.path_retry_count += 1
+            if self.path_retry_count > 3:
+                self.complete(entity, status=CommandStatus.FAILED)
+                return
+            self.path = []
+            return
+
+        if world.make_move(entity, *next_pos):
+            world.event_bus.emit(MoveEvent(source=entity))
+            self.path.pop(0)
+            self.path_retry_count = 0
+            
+            if self.x == entity.x and self.y == entity.y:
+                self.complete(entity)
+        else:
+            self.path = []
+            self.path_retry_count = 0
 
 @dataclass
 class WanderCommand(Command):
