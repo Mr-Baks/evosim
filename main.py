@@ -16,7 +16,7 @@ def make_food(x, y, world: World, nutrition=20):
     world.place_entity(e, x, y)   
 
 def make_plant(x, y, world: World):
-    e = Entity().add_component(Plant(fructify_treshold=random.randint(70, 90))).add_component(Render(symbol='P', color=(0, 200, 10)))
+    e = Entity().add_component(Plant(fructify_threshold=random.randint(70, 90))).add_component(Render(symbol='P', color=(0, 200, 10)))
     world.place_entity(e, x, y)
 
 s = Simulation(10, 10, (200, 30))

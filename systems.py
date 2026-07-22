@@ -54,11 +54,11 @@ def plant_system(entities: set[Entity], world: World):
     for e in entities:
         plant: Plant = e.get_component(Plant)
         plant.energy = min(plant.energy + plant.energy_increase, 180)
-        if plant.energy > plant.fructify_treshold:
+        if plant.energy > plant.fructify_threshold:
             free_cells = world.get_cells_near(e)
             if free_cells:
                 fruit = Entity().add_component(Eatable(nutrition=plant.fruit_nutrition)).add_component(Render(symbol='f', color=(115, 20, 10)))
-                plant.energy -= plant.fructify_treshold
+                plant.energy -= plant.fructify_threshold
                 world.place_entity(fruit, *random.choice(free_cells))
 
 def decision_system(entities: set[Entity], world: World):

@@ -37,7 +37,7 @@ class Simulation:
 
         for e in renderables:
             render: Render = e.get_component(Render)
-            if not render.is_visible: break
+            if not render.is_visible: continue
             r, g, b = render.color
             screen[e.y][e.x] = f'\033[38;2;{r};{g};{b}m{render.symbol}\033[0m'
 

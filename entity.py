@@ -9,7 +9,7 @@ class Component(ABC): pass
 @dataclass
 class State(Component):
     current: str = 'idle'
-    states: list = field(default_factory=set)
+    states: set = field(default_factory=set)
 
 @dataclass
 class Render(Component):
@@ -40,13 +40,13 @@ class Breedable(Component):
 @dataclass 
 class Vision(Component):
     radius: int = 4
-    visibles: set[Entity] = field(default_factory=list)
+    visibles: set[Entity] = field(default_factory=set)
 
 @dataclass 
 class Plant(Component):
     energy: int = 0
     energy_increase: int = 2
-    fructify_treshold: int = 80
+    fructify_threshold: int = 80
     fruit_nutrition: int = 25
 
 class Entity:
