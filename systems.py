@@ -34,7 +34,7 @@ def biochemistry_system(entities: set[Entity], world: World):
         breedable = e.get_component(Breedable)
         queue = e.get_component(CommandQueue)
         
-        if not queue.running or isinstance(queue.running, SleepCommand):
+        if not queue.running or not isinstance(queue.running, SleepCommand):
             bio.energy = max(bio.energy - 1, 0)
             if bio.energy == 0:
                 bio.health = max(bio.health - 1, 0)
@@ -55,7 +55,7 @@ def plant_system(entities: set[Entity], world: World):
         plant: Plant = e.get_component(Plant)
         plant.energy = min(plant.energy + plant.energy_increase, 180)
         if plant.energy > plant.fructify_threshold:
-            free_cells = world.get_cells_near(e)
+            free_cells = world.get_free_cells_near(e)
             if free_cells:
                 fruit = Entity().add_component(Eatable(nutrition=plant.fruit_nutrition)).add_component(Render(symbol='f', color=(115, 20, 10)))
                 plant.energy -= plant.fructify_threshold
