@@ -107,8 +107,12 @@ class DeathCommand(Command):
     def execute(self, entity: Entity, world: World):
         world.remove_entity(entity)
         if self.corpse_nutrition != 0:
-            corpse = Entity().add_component(Eatable(self.corpse_nutrition))
+            corpse = Entity().add_component(Eatable(self.corpse_nutrition)).add_component(Render(symbol='D', color=(255, 0, 0)))
             world.place_entity(corpse, entity.x, entity.y)
+
+        with open('log.txt', 'a') as log:
+            bio: Biochemistry = entity.get_component(Biochemistry)
+            log.write(f'died at {entity.x}, {entity.y} | Hunger: {bio.hunger}, energy: {bio.energy} \n')
 
 @dataclass
 class SleepCommand(Command):
@@ -245,8 +249,8 @@ class WanderCommand(Command):
 
         self.complete(entity)
         command = MoveToTargetCommand(x=tx, y=ty, priority=self.priority, emergency=self.emergency, target_state=self.target_state)
-        push_command(entity, world, command)
         command.execute(entity, world)
+        push_command(entity, world, command)
 
 def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETICS!!!
     child = Entity()
@@ -265,6 +269,9 @@ def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETIC
     b = max(0, min(255, int((b1 + b2) / 2 + random.randint(-10, 10))))
 
     render.color = (r, g, b)
+
+    with open('log.txt', 'a') as log:
+        log.write(f'Sex at {parent2.x}, {parent2.y}. Parents id: {(parent1.x + parent2.x + 1) * (parent1.y + parent2.y + 1)} \n')
 
     return child
 

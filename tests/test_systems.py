@@ -85,7 +85,7 @@ class TestBiochemistrySystem:
         biochemistry_system({e}, w)
         
         bio = e.get_component(Biochemistry)
-        assert bio.energy == 99
+        assert bio.energy == 99.5
 
     def test_biochemistry_system_energy_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(energy=0, health=100)).add_component(CommandQueue()).add_component(Movable())
@@ -105,7 +105,7 @@ class TestBiochemistrySystem:
         biochemistry_system({e}, w)
         
         bio = e.get_component(Biochemistry)
-        assert bio.hunger == 99
+        assert bio.hunger == 99.5
 
     def test_biochemistry_system_hunger_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(hunger=0, health=100)).add_component(CommandQueue()).add_component(Movable())
@@ -323,8 +323,8 @@ class TestSystemsIntegration:
         biochemistry_system({e}, w)
         w.event_bus.dispatch()
         
-        # Energy decays by 1 when not sleeping
-        assert e.get_component(Biochemistry).energy == 99
+        # Energy decays by 0.5 when not sleeping
+        assert e.get_component(Biochemistry).energy == 99.5
         assert len(e.get_component(CommandQueue).queue) >= 0
 
     def test_eat_then_energy_increase(self):

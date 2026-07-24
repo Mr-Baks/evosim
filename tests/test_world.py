@@ -55,7 +55,7 @@ class TestQueryIndex:
         e1 = Entity().add_component(Biochemistry())
         e2 = Entity().add_component(Movable())
         index.add_entity(e1)
-        index.remove_entity(e2)
+        index.add_entity(e2)
         
         index.locked = False
         index.flush_pending()
@@ -63,7 +63,9 @@ class TestQueryIndex:
         assert e1 in index.entities
         assert Biochemistry in index.component_index
         assert e1 in index.component_index[Biochemistry]
-        assert e2 not in index.entities
+        assert e2 in index.entities
+        assert Movable in index.component_index
+        assert e2 in index.component_index[Movable]
 
     def test_flush_pending_while_locked(self):
         index = QueryIndex()
