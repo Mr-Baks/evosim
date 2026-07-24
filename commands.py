@@ -208,27 +208,35 @@ class MoveToTargetCommand(Command):
                 self.complete(entity, CommandStatus.FAILED)
                 return
 
-        next_pos = self.path[0]
-        entity_at_next = world.get_entity(*next_pos)
-        
-        if entity_at_next and entity_at_next is not entity:
-            self.path_retry_count += 1
-            if self.path_retry_count > 3:
-                self.complete(entity, status=CommandStatus.FAILED)
-                return
-            self.path = []
-            return
+        movable: Movable = entity.get_component(Movable)
+        movable.movement_accumulator += movable.speed
+        steps = int(movable.movement_accumulator)
+        movable.movement_accumulator -= steps
 
-        if world.make_move(entity, *next_pos):
-            world.event_bus.emit(MoveEvent(source=entity))
-            self.path.pop(0)
-            self.path_retry_count = 0
+        for _ in range(steps):
+            if not self.path: break
             
-            if self.x == entity.x and self.y == entity.y:
-                self.complete(entity)
-        else:
-            self.path = []
-            self.path_retry_count = 0
+            next_pos = self.path[0]
+            entity_at_next = world.get_entity(*next_pos)
+
+            if entity_at_next and entity_at_next is not entity:
+                self.path_retry_count += 1
+                if self.path_retry_count > 3:
+                    self.complete(entity, status=CommandStatus.FAILED)
+                    return
+                self.path = []
+                return
+
+            if world.make_move(entity, *next_pos):
+                world.event_bus.emit(MoveEvent(source=entity))
+                self.path.pop(0)
+                self.path_retry_count = 0
+
+                if self.x == entity.x and self.y == entity.y:
+                    self.complete(entity)
+            else:
+                self.path = []
+                self.path_retry_count = 0
 
 @dataclass
 class WanderCommand(Command):
@@ -271,7 +279,7 @@ def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETIC
     render.color = (r, g, b)
 
     with open('log.txt', 'a') as log:
-        log.write(f'Sex at {parent2.x}, {parent2.y}. Parents id: {(parent1.x + parent2.x + 1) * (parent1.y + parent2.y + 1)} \n')
+        log.write(f'Mating at {parent2.x}, {parent2.y}. Parents id: {(parent1.x + parent2.x + 1) * (parent1.y + parent2.y + 1)} \n')
 
     return child
 
