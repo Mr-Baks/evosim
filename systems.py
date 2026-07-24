@@ -34,13 +34,17 @@ def biochemistry_system(entities: set[Entity], world: World):
         bio: Biochemistry = e.get_component(Biochemistry)
         breedable = e.get_component(Breedable)
         queue = e.get_component(CommandQueue)
+        genome: Genome = e.get_component(Genome)
+        
+        metabolism = genome.get_phenotype(GeneNames.METABOLISM)
+        speed = genome.get_phenotype(GeneNames.SPEED)
         
         if not queue.running or not isinstance(queue.running, SleepCommand):
-            bio.energy = max(bio.energy - 0.5, 0)
+            bio.energy = max(bio.energy - (1 + metabolism) * (1 + abs(speed)), 0)
             if bio.energy == 0:
                 bio.health = max(bio.health - 1, 0)
         
-        bio.hunger = max(bio.hunger - 0.5, 0)
+        bio.hunger = max(bio.hunger - 0.5 - speed, 0)
 
         if breedable:
             breedable.cooldown = max(breedable.cooldown - 1, 0)
@@ -73,11 +77,15 @@ def decision_system(entities: set[Entity], world: World):
         state: State = e.get_component(State)
         vision: Vision = e.get_component(Vision)
         bio: Biochemistry = e.get_component(Biochemistry)
+        genome: Genome = e.get_component(Genome)
 
         if not (bio and vision):
             continue
 
-        if bio.energy < 55 and 'sleeping' not in state.states:
+        energy_threshold = genome.get_phenotype(GeneNames.ENERGY_THRESHOLD) * 100 + 100
+        hunger_threshold = genome.get_phenotype(GeneNames.HUNGER_THRESHOLD) * 100 + 100
+
+        if bio.energy < energy_threshold and 'sleeping' not in state.states:
             if bio.hunger > 10:
                 ticks_to_sleep = int((200 - bio.energy) / SleepCommand().energy_increase)
             else:
@@ -85,7 +93,7 @@ def decision_system(entities: set[Entity], world: World):
 
             push_command(e, world, SleepCommand(ticks_to_sleep=ticks_to_sleep, emergency=60, target_state='sleeping'))
 
-        if bio.hunger < 70 and 'seeking_food' not in state.states and 'eating' not in state.states:
+        if bio.hunger < hunger_threshold and 'seeking_food' not in state.states and 'eating' not in state.states:
             food_candidates = [ve for ve in vision.visibles if ve.has_component(Eatable)]
             if food_candidates:
                 food_candidates.sort(key=lambda f: abs(e.x - f.x) + abs(e.y - f.y))

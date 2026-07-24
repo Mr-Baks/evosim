@@ -8,6 +8,7 @@ import math
 import random
 import heapq
 from typing import Optional
+from genome import Genome, GeneNames
 
 
 class CommandStatus(Enum):
@@ -270,13 +271,20 @@ def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETIC
     render = child.get_component(Render)
     render.symbol = 'C'
 
-    r1, g1, b1 = parent1.get_component(Render).color
-    r2, g2, b2 = parent2.get_component(Render).color
-    r = max(0, min(255, int((r1 + r2) / 2 + random.randint(-10, 10))))
-    g = max(0, min(255, int((g1 + g2) / 2 + random.randint(-10, 10))))
-    b = max(0, min(255, int((b1 + b2) / 2 + random.randint(-10, 10))))
+    genome1 = parent1.get_component(Genome)
+    genome2 = parent2.get_component(Genome)
+    genome = genome1.recombine(genome2)
+
+    child.add_component(genome)
+
+    r = int(genome.genes[GeneNames.COLOR_R].phenotype * 128 + 128)
+    g = int(genome.genes[GeneNames.COLOR_G].phenotype * 128 + 128)
+    b = int(genome.genes[GeneNames.COLOR_B].phenotype * 128 + 128)
 
     render.color = (r, g, b)
+
+    movable = child.get_component(Movable)
+    movable.speed = int(genome.genes[GeneNames.SPEED].phenotype * 2.5 + 2.5)
 
     with open('log.txt', 'a') as log:
         log.write(f'Mating at {parent2.x}, {parent2.y}. Parents id: {(parent1.x + parent2.x + 1) * (parent1.y + parent2.y + 1)} \n')

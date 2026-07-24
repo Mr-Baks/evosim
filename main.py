@@ -5,10 +5,19 @@ import random
 from commands import *
 from event_bus import Event, EventBus
 from systems import *
+from genome import Gene, GeneNames, Genome
 
 
 def make_creature(x, y, world: World, color=(80, 120, 200)):
-    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=color))
+    genes = []
+    genes.append(Gene(GeneNames.SPEED, 0.3, 0.3, dominant=False))
+    genes.append(Gene(GeneNames.ENERGY_THRESHOLD, -0.3, -0.3))
+    genes.append(Gene(GeneNames.HUNGER_THRESHOLD, -0.3, -0.3))
+    genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, -1))
+    genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1))
+    genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1))
+    genes.append(Gene(GeneNames.METABOLISM, 0.1, 0.2, dominant=False))
+    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=color)).add_component(Genome(genes))
     world.place_entity(e, x, y)
 
 def make_food(x, y, world: World, nutrition=20):
@@ -39,13 +48,16 @@ def tick_stats(sim: Simulation):
 
 s.add_on_tick(tick_stats)
 
-for x in range(s.world.width):
-    for y in range(s.world.height):
-        if x % 15 == 0 and y % 15 == 0:
-            make_creature(x, y, s.world)
-            make_creature(x - 1, y, s.world, color=(10, 180, 100))
+for _ in range(85):
+    x = random.randint(0, s.world.width - 1)
+    y = random.randint(0, s.world.height - 1)
+    if not s.world.get_entity(x, y):
+        make_plant(x, y, s.world)
 
-        if (x % 5 < 2 and y % 5 < 2) and random.random() > 0.9 and not s.world.get_entity(x, y):
-            make_plant(x, y, s.world)
+for _ in range(50):
+    x = random.randint(0, s.world.width - 1)
+    y = random.randint(0, s.world.height - 1)
+    if not s.world.get_entity(x, y):
+        make_creature(x, y, s.world)
 
 s.run()
