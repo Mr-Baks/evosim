@@ -10,18 +10,19 @@ def command_system(entities: set[Entity], world: World):
         queue = e.get_component(CommandQueue)
         state = e.get_component(State)
         command = queue.running
-        if command:
-            command.execute(e, world)
-        else: 
+        if not command:
             for c in queue.queue:
                 if c.is_ready(e, world):
-                    queue.running = c
+                    queue.running = command = c
                     c.status = CommandStatus.RUNNING
                     if c.target_state and state: 
                         state.states.add(c.target_state)
                     queue.queue.remove(c)
                     break
+        if command: 
+            command.execute(e, world)
         if len(queue.queue) > 25: print('LEAK')
+        # if not queue.running: print(queue.queue)
 
 def vision_system(entities: set[Entity], world: World):
     for e in entities:
@@ -101,8 +102,11 @@ def decision_system(entities: set[Entity], world: World):
                     free_cells = world.get_free_cells_near(f)
                     if free_cells:
                         tx, ty = free_cells[0]
-                        push_command(e, world, MoveToTargetCommand(x=tx, y=ty, emergency=50, target_state='seeking_food'))
-                        push_command(e, world, EatCommand(target_x=f.x, target_y=f.y, emergency=51, target_state='eating'))
+                        push_command(e, world, 
+                                     MoveToTargetCommand(x=tx, y=ty, emergency=50),
+                                     EatCommand(target_x=f.x, target_y=f.y, emergency=51),
+                                     target_state='eating'
+                                     )
                         break
                 else:
                     push_command(e, world, WanderCommand(emergency=49, target_state='seeking_food'))
@@ -117,8 +121,11 @@ def decision_system(entities: set[Entity], world: World):
                     free_cells = world.get_free_cells_near(p)
                     if free_cells:
                         tx, ty = free_cells[0]
-                        push_command(e, world, MoveToTargetCommand(x=tx, y=ty, emergency=15, target_state='seeking_partner'))
-                        push_command(e, world, MateCommand(partner=p, emergency=16, target_state='breeding'))
+                        push_command(e, world, 
+                                     MoveToTargetCommand(x=tx, y=ty, emergency=15),
+                                     MateCommand(partner=p, emergency=16),
+                                     target_state='breeding'
+                        )
                         break
 
         if not queue.running and 'wandering' not in state.states:

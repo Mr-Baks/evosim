@@ -23,11 +23,12 @@ class CommandStatus(Enum):
 class Command(ABC):
     priority: int = 0
     status: CommandStatus = CommandStatus.PENDING
+    target_status: CommandStatus = CommandStatus.PENDING
     emergency: int = 0
     target_state: Optional[str] = None
 
     @abstractmethod
-    def execute(self, entity: Entity, world: World) -> CommandStatus:
+    def execute(self, entity: Entity, world: World) -> None:
         """Execute command's step"""
         pass
 
@@ -47,14 +48,58 @@ class Command(ABC):
             self.status = status
             if state:
                 state.current = 'idle'
-                state.states.discard(self.target_state)
+                state.states.discard(self.target_state) 
+        self.target_status = status    
 
 @dataclass
 class CommandQueue(Component):
     queue: list[Command] = field(default_factory=list)
     running: Optional[Command] = None
 
-def push_command(entity: Entity, world: World, command: Command) -> None:
+class CommandGroup(Command):
+    def __init__(self, subcommands: list[Command], priority: int = 0, status: CommandStatus = CommandStatus.PENDING, emergency: int = 0, target_state: Optional[str] = None):
+        super().__init__(priority=priority, status=status, emergency=emergency, target_state=target_state)
+        self._queue = CommandQueue(queue=subcommands)
+
+        for c in subcommands:
+            self.emergency = max(self.emergency, c.emergency)
+            self.priority = max(self.priority, c.priority)
+            c.target_state = self.target_state
+
+            if not self.target_state:
+                if c.target_state:
+                    self.target_state = c.target_state
+
+    def on_interruption(self, entity: Entity):
+        for c in self._queue.queue:
+            c.complete(entity, status=CommandStatus.CANCELLED)
+
+        if self._queue.running:
+            self._queue.running.complete(entity, status=CommandStatus.INTERRUPTED)
+            self._queue.running.on_interruption(entity)
+
+        self.complete(entity, status=CommandStatus.INTERRUPTED)
+
+    def execute(self, entity: Entity, world: World):
+        if not self._queue.running or self._queue.running.target_status != CommandStatus.RUNNING:
+            self._queue.queue = [cmd for cmd in self._queue.queue if cmd.target_status == CommandStatus.PENDING]
+            for i, cmd in enumerate(self._queue.queue):
+                if cmd.is_ready(entity, world):
+                    self._queue.running = self._queue.queue.pop(i)
+                    self._queue.running.target_status = CommandStatus.RUNNING
+                    break
+            else:
+                self.complete(entity)
+                return
+
+        self._queue.running.execute(entity, world)
+        
+def push_command(entity: Entity, world: World, *commands: Command, target_state: Optional[str] = None) -> None:
+    if len(commands) > 1:
+        command = CommandGroup(list(commands), target_state=target_state)
+    else:
+        command = commands[0]
+
     queue = entity.get_component(CommandQueue)
     state = entity.get_component(State)
     if not queue or queue.running is command: return
@@ -296,7 +341,7 @@ class MateCommand(Command):
     partner: Entity = None
 
     def is_ready(self, entity, world):
-        if abs(entity.x - self.partner.x) + abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0:
+        if abs(entity.x - self.partner.x) + abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0 or entity.get_component(Breedable).cooldown > 0:
             return False
         return True
 
