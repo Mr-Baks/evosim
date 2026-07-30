@@ -22,7 +22,6 @@ def command_system(entities: set[Entity], world: World):
         if command: 
             command.execute(e, world)
         if len(queue.queue) > 25: print('LEAK')
-        # if not queue.running: print(queue.queue)
 
 def vision_system(entities: set[Entity], world: World):
     for e in entities:
@@ -41,7 +40,7 @@ def biochemistry_system(entities: set[Entity], world: World):
         speed = genome.get_phenotype(GeneNames.SPEED)
         
         if not queue.running or not isinstance(queue.running, SleepCommand):
-            bio.energy = max(bio.energy - (1 + metabolism) * (1 + abs(speed)), 0)
+            bio.energy = max(bio.energy - (1 + metabolism) * (1 + speed) ** 2, 0)
             if bio.energy == 0:
                 bio.health = max(bio.health - 1, 0)
         
@@ -57,7 +56,7 @@ def biochemistry_system(entities: set[Entity], world: World):
             push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=50))
 
         if bio.energy > 60 and bio.hunger > 60 and bio.health < 80:
-            bio.health += 5
+            bio.health += 5 * (1 + metabolism)
             bio.energy -= 5
             bio.hunger -= 5
 
@@ -78,6 +77,7 @@ def decision_system(entities: set[Entity], world: World):
         state: State = e.get_component(State)
         vision: Vision = e.get_component(Vision)
         bio: Biochemistry = e.get_component(Biochemistry)
+        breeadable: Breedable = e.get_component(Breedable)
         genome: Genome = e.get_component(Genome)
 
         if not (bio and vision):
@@ -113,7 +113,7 @@ def decision_system(entities: set[Entity], world: World):
             else:
                 push_command(e, world, WanderCommand(emergency=49, target_state='seeking_food', radius=8))
 
-        elif bio.energy > 70 and bio.hunger > 70 and (not queue.running or queue.running.emergency == 0) and 'seeking_partner' not in state.states and 'breeding' not in state.states:
+        elif bio.energy > 85 and bio.hunger > 85 and (not queue.running or queue.running.emergency == 0) and 'breeding' not in state.states and breeadable.cooldown == 0:
             partners = [ve for ve in vision.visibles if ve.has_component(Breedable) and ve is not e]
             if partners:
                 partners.sort(key=lambda p: abs(e.x - p.x) + abs(e.y - p.y))

@@ -17,7 +17,7 @@ def make_creature(x, y, world: World, color=(80, 120, 200)):
     genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1))
     genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1))
     genes.append(Gene(GeneNames.METABOLISM, 0.1, 0.2, dominant=False))
-    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=color)).add_component(Genome(genes))
+    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable()).add_component(Render(symbol='C', color=color)).add_component(Genome(genes))
     world.place_entity(e, x, y)
 
 def make_food(x, y, world: World, nutrition=20):
@@ -28,7 +28,7 @@ def make_plant(x, y, world: World):
     e = Entity().add_component(Plant(fructify_threshold=random.randint(70, 90))).add_component(Render(symbol='P', color=(0, 200, 10)))
     world.place_entity(e, x, y)
 
-s = Simulation(10, 10, (180, 30), background_sym='.')
+s = Simulation(10, 10, (190, 40), background_sym='.')
 
 s.world.event_bus.subscribe(EatEvent, on_eat)
 s.world.event_bus.subscribe(SleepEvent, on_sleep)
@@ -55,8 +55,8 @@ for _ in range(85):
         make_plant(x, y, s.world)
 
 for _ in range(50):
-    x = random.randint(0, s.world.width - 1)
-    y = random.randint(0, s.world.height - 1)
+    x = random.randint(0, s.world.width // 5)
+    y = random.randint(0, s.world.height // 5)
     if not s.world.get_entity(x, y):
         make_creature(x, y, s.world)
 

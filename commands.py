@@ -306,7 +306,7 @@ class WanderCommand(Command):
         command.execute(entity, world)
         push_command(entity, world, command)
 
-def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETICS!!!
+def create_child(parent1: Entity, parent2: Entity, world: World):
     child = Entity()
     
     components = set(parent1.components_dict.keys()) | set(parent2.components_dict.keys())
@@ -318,21 +318,21 @@ def create_child(parent1: Entity, parent2: Entity, world: World): # TODO GENETIC
 
     genome1 = parent1.get_component(Genome)
     genome2 = parent2.get_component(Genome)
-    genome = genome1.recombine(genome2)
+    genome: Genome = genome1.recombine(genome2)
 
     child.add_component(genome)
 
-    r = int(genome.genes[GeneNames.COLOR_R].phenotype * 128 + 128)
-    g = int(genome.genes[GeneNames.COLOR_G].phenotype * 128 + 128)
-    b = int(genome.genes[GeneNames.COLOR_B].phenotype * 128 + 128)
+    r = int(genome.get_phenotype(GeneNames.COLOR_R) * 128 + 128)
+    g = int(genome.get_phenotype(GeneNames.COLOR_G) * 128 + 128)
+    b = int(genome.get_phenotype(GeneNames.COLOR_B) * 128 + 128)
 
     render.color = (r, g, b)
 
     movable = child.get_component(Movable)
-    movable.speed = int(genome.genes[GeneNames.SPEED].phenotype * 2.5 + 2.5)
+    movable.speed = int(genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5)
 
     with open('log.txt', 'a') as log:
-        log.write(f'Mating at {parent2.x}, {parent2.y}. Parents id: {(parent1.x + parent2.x + 1) * (parent1.y + parent2.y + 1)} \n')
+        log.write(f'Mating at {parent2.x}, {parent2.y}\n')
 
     return child
 
@@ -351,6 +351,6 @@ class MateCommand(Command):
         if free_cells and child:
             x, y = free_cells[0]
             world.place_entity(child, x, y)
-        entity.get_component(Breedable).cooldown = 40
-        self.partner.get_component(Breedable).cooldown = 40
+        entity.get_component(Breedable).cooldown = 200
+        self.partner.get_component(Breedable).cooldown = 200
         self.complete(entity)
