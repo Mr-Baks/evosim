@@ -43,7 +43,7 @@ def biochemistry_system(entities: set[Entity], world: World):
             if bio.energy == 0:
                 bio.health = max(bio.health - 1, 0)
         
-        bio.hunger = max(bio.hunger - (2 + speed) ** 2 / 2, 0)
+        bio.hunger = max(bio.hunger - (1 + metabolism) * (2 + speed) ** 2 / 4, 0)
 
         if breedable:
             breedable.cooldown = max(breedable.cooldown - 1, 0)

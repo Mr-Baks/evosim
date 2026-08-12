@@ -27,7 +27,7 @@ class Gene:
             a2 = max(-1, min(1, a2 + random.uniform(-strength, strength)))
 
         return Gene(self.name, a1, a2, self.dominant)
-print(f'a {[i for i in range(10)]}')
+
 class GeneNames:
     SPEED = 'speed'
     METABOLISM = 'metabolism'

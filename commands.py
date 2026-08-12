@@ -174,7 +174,7 @@ class SleepCommand(Command):
         self.ticks_to_sleep -= 1
         world.event_bus.emit(SleepEvent(source=entity, energy_increase=self.energy_increase))
 
-        if self.ticks_to_sleep == 0:
+        if self.ticks_to_sleep <= 0:
             self.complete(entity)
 
 @dataclass
@@ -248,11 +248,6 @@ class MoveToTargetCommand(Command):
             self.complete(entity)
             return
 
-        target_entity = world.get_entity(self.x, self.y)
-        if target_entity and target_entity is not entity:
-            self.complete(entity, status=CommandStatus.FAILED)
-            return
-
         if not self.path:
             self.path = self._find_path(world, (entity.x, entity.y), ignore_entity=entity)
             if not self.path:
@@ -268,15 +263,6 @@ class MoveToTargetCommand(Command):
             if not self.path: break
             
             next_pos = self.path[0]
-            entity_at_next = world.get_entity(*next_pos)
-
-            if entity_at_next and entity_at_next is not entity:
-                self.path_retry_count += 1
-                if self.path_retry_count > 7:
-                    self.complete(entity, status=CommandStatus.FAILED)
-                    return
-                self.path = []
-                return
 
             if world.make_move(entity, *next_pos):
                 world.event_bus.emit(MoveEvent(source=entity))
@@ -286,8 +272,12 @@ class MoveToTargetCommand(Command):
                 if self.x == entity.x and self.y == entity.y:
                     self.complete(entity)
             else:
+                self.path_retry_count += 1
+                if self.path_retry_count > 7:
+                    self.complete(entity, status=CommandStatus.FAILED)
+                    return
                 self.path = []
-                self.path_retry_count = 0
+                return
 
 @dataclass
 class WanderCommand(Command):

@@ -54,17 +54,20 @@ def tick_stats(sim: Simulation):
     food_amount = len(sim.world.index.get_with(Eatable))
     creatures_amount = len(sim.world.index.get_with(Movable))
 
-    print(f'creatures: {creatures_amount} | food: {food_amount}')
+    speeds = [e.get_component(Movable).speed for e in sim.world.index.get_with(Movable)]
+    avg_speed = sum(speeds) / len(speeds)
+
+    print(f'creatures: {creatures_amount} | food: {food_amount} | avg speed: {avg_speed}')
 
 s.add_on_tick(tick_stats)
 
-for _ in range(85):
+for _ in range(120):
     x = random.randint(0, s.world.width - 1)
     y = random.randint(0, s.world.height - 1)
     if not s.world.get_entity(x, y):
         make_plant(x, y, s.world)
 
-for _ in range(2):
+for _ in range(40):
     x = random.randint(0, s.world.width - 1)
     y = random.randint(0, s.world.height - 1)
     if not s.world.get_entity(x, y):

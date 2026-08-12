@@ -249,6 +249,16 @@ class TestSleepCommand:
         assert cmd.ticks_to_sleep == 0
         assert cmd.status == CommandStatus.COMPLETED
 
+    def test_execute_completes_when_rounded_to_zero(self):
+        e = Entity().add_component(Biochemistry()).add_component(CommandQueue()).add_component(State())
+        w = World()
+        cmd = SleepCommand(ticks_to_sleep=0)
+        queue = e.get_component(CommandQueue)
+        queue.running = cmd
+        cmd.execute(e, w)
+        assert cmd.status == CommandStatus.COMPLETED
+        assert queue.running is None
+
 
 class TestMoveToTargetCommand:
     def test_execute_moves_towards_target(self):
@@ -310,7 +320,14 @@ class TestMoveToTargetCommand:
         cmd = MoveToTargetCommand(x=6, y=5)
         queue = e.get_component(CommandQueue)
         queue.running = cmd
+        
+        # Occupied goal is awaited for several retries, then the command gives up
         cmd.execute(e, w)
+        assert cmd.status != CommandStatus.FAILED
+        assert e.x == 5
+        
+        for _ in range(8):
+            cmd.execute(e, w)
         
         assert cmd.status == CommandStatus.FAILED
 

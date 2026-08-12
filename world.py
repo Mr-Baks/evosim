@@ -51,6 +51,9 @@ class QueryIndex:
 
         for e in self.pending_addition:
             self.add_entity(e)
+
+        self.pending_addition.clear()
+        self.pending_removal.clear()
         
     def register_system(self, components: frozenset[type[Component]]) -> None:
         self.systems_cache[components] = self.get_with(*components)
