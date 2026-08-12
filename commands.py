@@ -43,6 +43,11 @@ class Command(ABC):
     def complete(self, entity: Entity, status=CommandStatus.COMPLETED) -> None:
         queue = entity.get_component(CommandQueue)
         state = entity.get_component(State)
+
+        if status == CommandStatus.FAILED:
+                    with open('logs/error_log.txt', 'a') as log:
+                        log.write(f'Command {type(self)} failed | current state: {state.current if state else 'no state'} \n')
+        
         if queue and queue.running == self:
             queue.running = None
             self.status = status
@@ -156,14 +161,14 @@ class DeathCommand(Command):
             corpse = Entity().add_component(Eatable(self.corpse_nutrition)).add_component(Render(symbol='D', color=(255, 0, 0)))
             world.place_entity(corpse, entity.x, entity.y)
 
-        with open('log.txt', 'a') as log:
+        with open('logs/log.txt', 'a') as log:
             bio: Biochemistry = entity.get_component(Biochemistry)
             log.write(f'died at {entity.x}, {entity.y} | Hunger: {bio.hunger}, energy: {bio.energy} \n')
 
 @dataclass
 class SleepCommand(Command):
     ticks_to_sleep: int = 5
-    energy_increase: int = 15
+    energy_increase: int = 50
 
     def execute(self, entity: Entity, world: World):
         self.ticks_to_sleep -= 1
@@ -267,7 +272,7 @@ class MoveToTargetCommand(Command):
 
             if entity_at_next and entity_at_next is not entity:
                 self.path_retry_count += 1
-                if self.path_retry_count > 3:
+                if self.path_retry_count > 7:
                     self.complete(entity, status=CommandStatus.FAILED)
                     return
                 self.path = []
@@ -329,9 +334,9 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
     render.color = (r, g, b)
 
     movable = child.get_component(Movable)
-    movable.speed = int(genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5)
+    movable.speed = genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5
 
-    with open('log.txt', 'a') as log:
+    with open('logs/log.txt', 'a') as log:
         log.write(f'Mating at {parent2.x}, {parent2.y}\n')
 
     return child

@@ -27,7 +27,7 @@ class Gene:
             a2 = max(-1, min(1, a2 + random.uniform(-strength, strength)))
 
         return Gene(self.name, a1, a2, self.dominant)
-
+print(f'a {[i for i in range(10)]}')
 class GeneNames:
     SPEED = 'speed'
     METABOLISM = 'metabolism'
@@ -36,6 +36,13 @@ class GeneNames:
     COLOR_B = 'color_b'
     HUNGER_THRESHOLD = 'hunger_threshold'
     ENERGY_THRESHOLD = 'energy_threshold'
+    HUNGER_DRIVE = 'hunger_drive'
+    SLEEP_DRIVE = 'sleep_drive'
+    MATING_DRIVE = 'mating_drive'
+    EXPLORATION_DRIVE = 'exploration_drive'
+    MATING_HUNGER_THRESHOLD = 'mating_hunger_treshold'
+    MATING_ENERGY_THRESHOLD = 'mating_energy_treshold'
+    FERTILITY = 'fertility'
 
 class Genome(Component):
     def __init__(self, genes: Optional[list[Gene]] = None):
@@ -58,7 +65,7 @@ class Genome(Component):
             return self.genes[name].phenotype
         return None
 
-    def recombine(self, genome: Genome, mutation_rate: float = 0.1, strength: float = 0.3) -> Genome:
+    def recombine(self, genome: Genome, mutation_rate: float = 0.9, strength: float = 0.9) -> Genome:
         genes = []
 
         for name in self.genes:

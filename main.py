@@ -10,13 +10,22 @@ from genome import Gene, GeneNames, Genome
 
 def make_creature(x, y, world: World, color=(80, 120, 200)):
     genes = []
-    genes.append(Gene(GeneNames.SPEED, 0.3, 0.3, dominant=False))
+
+    genes.append(Gene(GeneNames.SPEED, -0.6, -0.6, dominant=False))
     genes.append(Gene(GeneNames.ENERGY_THRESHOLD, -0.3, -0.3))
     genes.append(Gene(GeneNames.HUNGER_THRESHOLD, -0.3, -0.3))
-    genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, -1))
-    genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1))
-    genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1))
+    genes.append(Gene(GeneNames.HUNGER_DRIVE, 0.5, 0.5))
+    genes.append(Gene(GeneNames.SLEEP_DRIVE, 0.5, 0.5))
+    genes.append(Gene(GeneNames.EXPLORATION_DRIVE, 0.5, 0.5))
+    genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, -1, dominant=False))
+    genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1, dominant=False))
+    genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1, dominant=False))
     genes.append(Gene(GeneNames.METABOLISM, 0.1, 0.2, dominant=False))
+    genes.append(Gene(GeneNames.MATING_DRIVE, 1, 1))
+    genes.append(Gene(GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2))
+    genes.append(Gene(GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2))
+    genes.append(Gene(GeneNames.FERTILITY, -0.5, -0.5))
+
     e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable()).add_component(Render(symbol='C', color=color)).add_component(Genome(genes))
     world.place_entity(e, x, y)
 
@@ -28,14 +37,15 @@ def make_plant(x, y, world: World):
     e = Entity().add_component(Plant(fructify_threshold=random.randint(70, 90))).add_component(Render(symbol='P', color=(0, 200, 10)))
     world.place_entity(e, x, y)
 
-s = Simulation(10, 10, (190, 40), background_sym='.')
+s = Simulation(10, 10, (100, 40), background_sym='.')
 
 s.world.event_bus.subscribe(EatEvent, on_eat)
 s.world.event_bus.subscribe(SleepEvent, on_sleep)
 s.world.event_bus.subscribe(MoveEvent, on_move)
 
+s.register_system(frozenset([CommandQueue, State, Biochemistry]), logging_system, priority=0)
 s.register_system(frozenset([CommandQueue]), command_system, priority=50)
-s.register_system(frozenset([Vision]), vision_system, priority=80)
+s.register_system(frozenset([Vision]), vision_system, priority=200)
 s.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
 s.register_system(frozenset([Plant]), plant_system, priority=75)
 s.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
@@ -54,9 +64,9 @@ for _ in range(85):
     if not s.world.get_entity(x, y):
         make_plant(x, y, s.world)
 
-for _ in range(50):
-    x = random.randint(0, s.world.width // 5)
-    y = random.randint(0, s.world.height // 5)
+for _ in range(2):
+    x = random.randint(0, s.world.width - 1)
+    y = random.randint(0, s.world.height - 1)
     if not s.world.get_entity(x, y):
         make_creature(x, y, s.world)
 
