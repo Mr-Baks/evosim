@@ -73,4 +73,4 @@ for _ in range(40):
     if not s.world.get_entity(x, y):
         make_creature(x, y, s.world)
 
-s.run()
+s.run(target_tick=120)

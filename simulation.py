@@ -7,6 +7,7 @@ class Simulation:
     def __init__(self, tickspeed: int, fps: int, world_size: tuple[int, int], background_sym: str = '.'):
         self.tickspeed = tickspeed
         self.fps = fps
+        self.tick = 0
         self.background_sym = background_sym
         self.world = World(width=world_size[0], height=world_size[1])
         self.systems: list[tuple[int, frozenset[type[Component]], callable]] = []
@@ -49,7 +50,7 @@ class Simulation:
             out += ''.join(line) + '\n'
         print(out)
 
-    def run(self):
+    def run(self, target_tick: int | None = None):
         last_time = time.time()
         accumulator = 0.0
         tick_duration = 1.0 / self.tickspeed
@@ -71,6 +72,10 @@ class Simulation:
                 self.handle_systems()
                 self.world.event_bus.dispatch()
                 accumulator -= tick_duration
+                self.tick += 1
+
+                if self.tick == target_tick:
+                    self.is_running = False
 
                 for c in self.on_tick_callbacks:
                     c(self)
@@ -80,4 +85,3 @@ class Simulation:
             sleep_time = frame_duration - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
-
