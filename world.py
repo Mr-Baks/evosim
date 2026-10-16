@@ -31,7 +31,10 @@ class QueryIndex:
 
     def remove_entity(self, entity: Entity) -> None:
         if self.locked:
-            self.pending_removal.append(entity)
+            if entity in self.pending_addition:
+                self.pending_addition.remove(entity)
+            else:
+                self.pending_removal.append(entity)
             return
         
         self.entities.discard(entity)
@@ -45,8 +48,6 @@ class QueryIndex:
         if self.locked: return
 
         for e in self.pending_removal:
-            if e in self.pending_addition:
-                self.pending_addition.remove(e)
             self.remove_entity(e)
 
         for e in self.pending_addition:
@@ -123,10 +124,9 @@ class World:
         return True
 
     def remove_entity(self, entity: Entity) -> Optional[Entity]:
-        if entity in self.index.entities:
+        if self.get_entity(entity.x, entity.y) is entity:
             self.index.remove_entity(entity)
-            ex, ey = entity.x, entity.y
-            self.cells[ey][ex] = None
+            self.cells[entity.y][entity.x] = None
             return entity
 
     def _get_offsets(self, radius: int) -> list[tuple[int, int]]:
@@ -158,7 +158,7 @@ class World:
 
         for (dx, dy) in offsets:
             nx, ny = entity.x + dx, entity.y + dy
-            if self.get_entity(nx, ny) is None:
+            if self._check_cell(nx, ny):
                 free_cells.append((nx, ny))
 
         return free_cells
