@@ -7,8 +7,8 @@ import random
 
 def command_system(entities: set[Entity], world: World):
     for e in entities:
-        queue = e.get_component(CommandQueue)
-        state = e.get_component(State)
+        queue: CommandQueue = e.get_component(CommandQueue)
+        state: State = e.get_component(State)
         command = queue.running
         if not command:
             for c in queue.queue:
@@ -17,6 +17,7 @@ def command_system(entities: set[Entity], world: World):
                     c.status = CommandStatus.RUNNING
                     if c.target_state and state: 
                         state.states.add(c.target_state)
+                        state.current = c.target_state
                     queue.queue.remove(c)
                     break
         if command: 

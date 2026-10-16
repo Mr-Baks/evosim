@@ -65,15 +65,12 @@ class CommandGroup(Command):
     def __init__(self, subcommands: list[Command], priority: int = 0, status: CommandStatus = CommandStatus.PENDING, emergency: int = 0, target_state: Optional[str] = None):
         super().__init__(priority=priority, status=status, emergency=emergency, target_state=target_state)
         self._queue = CommandQueue(queue=subcommands)
+        self.target_state = target_state
+        self.has_target_state = bool(target_state)
 
         for c in subcommands:
             self.emergency = max(self.emergency, c.emergency)
             self.priority = max(self.priority, c.priority)
-            c.target_state = self.target_state
-
-            if not self.target_state:
-                if c.target_state:
-                    self.target_state = c.target_state
 
     def on_interruption(self, entity: Entity):
         for c in self._queue.queue:
@@ -92,6 +89,10 @@ class CommandGroup(Command):
                 if cmd.is_ready(entity, world):
                     self._queue.running = self._queue.queue.pop(i)
                     self._queue.running.target_status = CommandStatus.RUNNING
+                    if self.has_target_state:
+                        cmd.target_state = self.target_state
+                    else:
+                        self.target_state = cmd.target_state
                     break
             else:
                 self.complete(entity)
@@ -104,6 +105,8 @@ def push_command(entity: Entity, world: World, *commands: Command, target_state:
         command = CommandGroup(list(commands), target_state=target_state)
     else:
         command = commands[0]
+        if target_state:
+            command.target_state = target_state
 
     queue = entity.get_component(CommandQueue)
     state = entity.get_component(State)
