@@ -2,6 +2,8 @@ from commands import *
 from entity import *
 from world import World
 from event_bus import EventBus
+from genome import Gene, GeneNames
+from tests.helpers import default_genes
 
 
 class TestCommandStatus:
@@ -378,41 +380,60 @@ class TestMateCommand:
         assert cmd.is_ready(e1, w) is False
 
     def test_execute_creates_child(self):
-        e1 = Entity(x=5, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State())
-        e2 = Entity(x=6, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State())
+        e1 = Entity(x=5, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes())
+        e2 = Entity(x=6, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes())
         w = World(10, 10)
         w.place_entity(e1, 5, 5)
         w.place_entity(e2, 6, 5)
-        
+
         free_cells_before = w.get_free_cells_near(e1)
         expected_child_pos = free_cells_before[0]
-        
+
         cmd = MateCommand(partner=e2)
         queue = e1.get_component(CommandQueue)
         queue.running = cmd
         cmd.execute(e1, w)
-        
+
         assert cmd.status == CommandStatus.COMPLETED
-        assert e1.get_component(Breedable).cooldown == 40
-        assert e2.get_component(Breedable).cooldown == 40
-        
+        assert e1.get_component(Breedable).cooldown == 200
+        assert e2.get_component(Breedable).cooldown == 200
+
         # Child should be placed at the first free cell near e1 before execution
         child = w.get_entity(*expected_child_pos)
         assert child is not None
         assert child.has_component(Biochemistry)
         assert child.has_component(Movable)
+        # Child inherits a recombined genome
+        assert child.has_component(Genome)
 
 
 class TestCreateChild:
     def test_create_child_combines_components(self):
-        e1 = Entity().add_component(Biochemistry()).add_component(Movable()).add_component(Render(symbol='C', color=(100, 100, 100)))
-        e2 = Entity().add_component(Biochemistry()).add_component(Vision()).add_component(Render(symbol='C', color=(200, 200, 200)))
+        genes1 = [Gene(GeneNames.SPEED, 0.2, 0.2),
+                  Gene(GeneNames.COLOR_R, 0.5, 0.5),
+                  Gene(GeneNames.COLOR_G, 0.1, 0.1),
+                  Gene(GeneNames.COLOR_B, 0.1, 0.1)]
+        genes2 = [Gene(GeneNames.SPEED, -0.4, -0.4),
+                  Gene(GeneNames.COLOR_R, -0.5, -0.5),
+                  Gene(GeneNames.COLOR_G, -0.2, -0.2),
+                  Gene(GeneNames.COLOR_B, -0.2, -0.2)]
+        e1 = Entity().add_component(Biochemistry()).add_component(Movable()).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Genome(genes1))
+        e2 = Entity().add_component(Biochemistry()).add_component(Vision()).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Genome(genes2))
         w = World()
-        
+
         child = create_child(e1, e2, w)
-        
+
         assert child.has_component(Biochemistry)
         assert child.has_component(Movable)
         assert child.has_component(Vision)
         assert child.has_component(Render)
+        assert child.has_component(Genome)
         assert child.get_component(Render).symbol == 'C'
+
+        # Speed and color are derived from the child's recombined genome
+        genome = child.get_component(Genome)
+        r = int(genome.get_phenotype(GeneNames.COLOR_R) * 128 + 128)
+        g = int(genome.get_phenotype(GeneNames.COLOR_G) * 128 + 128)
+        b = int(genome.get_phenotype(GeneNames.COLOR_B) * 128 + 128)
+        assert child.get_component(Movable).speed == genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5
+        assert child.get_component(Render).color == (r, g, b)

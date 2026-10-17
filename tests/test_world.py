@@ -42,12 +42,23 @@ class TestQueryIndex:
 
     def test_remove_entity_locked(self):
         index = QueryIndex()
-        index.locked = True
         e = Entity().add_component(Biochemistry())
+
+        # Adding and then removing while locked cancels the pending addition:
+        # the entity never enters the index nor any pending list
+        index.locked = True
         index.add_entity(e)
         index.remove_entity(e)
+        assert e not in index.entities
+        assert e not in index.pending_addition
+        assert e not in index.pending_removal
+
+        # Removing an already-indexed entity while locked defers removal
+        index.locked = False
+        index.add_entity(e)
+        index.locked = True
+        index.remove_entity(e)
         assert e in index.pending_removal
-        assert e in index.pending_addition  # When locked, add_entity puts in pending_addition
 
     def test_flush_pending(self):
         index = QueryIndex()

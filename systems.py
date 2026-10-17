@@ -100,6 +100,9 @@ def mate_utility(entity: Entity, world: World) -> float:
     genome: Genome = entity.get_component(Genome)
     breedable: Breedable = entity.get_component(Breedable)
 
+    if breedable is None:
+        return -1
+
     energy_threshold = genome.get_phenotype(GeneNames.MATING_ENERGY_THRESHOLD)
     hunger_threshold = genome.get_phenotype(GeneNames.MATING_HUNGER_THRESHOLD)
     cooldown = breedable.cooldown
@@ -165,6 +168,10 @@ def decision_system(entities: set[Entity], world: World):
         state: State = e.get_component(State)
         vision: Vision = e.get_component(Vision)
         bio: Biochemistry = e.get_component(Biochemistry)
+        genome: Genome = e.get_component(Genome)
+
+        if not (bio and vision and genome):
+            continue
 
         utilities = {
             'eat': eat_utility(e, world),

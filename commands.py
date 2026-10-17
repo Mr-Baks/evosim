@@ -339,7 +339,7 @@ class MateCommand(Command):
     partner: Entity = None
 
     def is_ready(self, entity, world):
-        if abs(entity.x - self.partner.x) + abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0 or entity.get_component(Breedable).cooldown > 0:
+        if abs(entity.x - self.partner.x) > 1 or abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0 or entity.get_component(Breedable).cooldown > 0:
             return False
         return True
 

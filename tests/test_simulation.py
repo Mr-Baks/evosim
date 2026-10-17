@@ -4,6 +4,8 @@ from world import World
 from entity import Entity, Biochemistry, State, Vision, Movable, Breedable, Render, Eatable, Plant
 from commands import CommandQueue, MoveToTargetCommand, CommandStatus
 from event_bus import EventBus, EatEvent, SleepEvent, MoveEvent, on_eat, on_sleep, on_move
+from genome import Genome
+from tests.helpers import default_genes, make_decision_random_deterministic
 
 
 class TestSimulation:
@@ -245,14 +247,17 @@ class TestSimulation:
 
 
 class TestSimulationIntegration:
-    def test_creature_eats_food(self):
+    def test_creature_eats_food(self, monkeypatch):
         sim = Simulation(tickspeed=1000, fps=30, world_size=(10, 10))
         # Subscribe event handlers
         sim.world.event_bus.subscribe(EatEvent, on_eat)
         sim.world.event_bus.subscribe(SleepEvent, on_sleep)
         sim.world.event_bus.subscribe(MoveEvent, on_move)
-        
-        creature = Entity().add_component(Biochemistry(energy=100, hunger=30)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable())
+
+        make_decision_random_deterministic(monkeypatch)
+
+        # Strong hunger drive so 'eat' utility beats 'idle'
+        creature = Entity().add_component(Biochemistry(energy=100, hunger=30)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(hunger_drive=1.0, exploration_drive=0.0))
         sim.world.place_entity(creature, 5, 5)
         
         food = Entity().add_component(Eatable(nutrition=20)).add_component(Movable())
@@ -277,7 +282,8 @@ class TestSimulationIntegration:
     def test_creature_sleeps_when_low_energy(self):
         sim = Simulation(tickspeed=1000, fps=30, world_size=(10, 10))
         
-        creature = Entity().add_component(Biochemistry(energy=30, hunger=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable())
+        # Strong sleep drive so 'sleep' utility beats 'idle'
+        creature = Entity().add_component(Biochemistry(energy=30, hunger=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(sleep_drive=0.5))
         sim.world.place_entity(creature, 5, 5)
         
         from systems import decision_system, command_system, biochemistry_system
