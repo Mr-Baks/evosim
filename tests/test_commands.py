@@ -412,13 +412,15 @@ class TestCreateChild:
         genes1 = [Gene(GeneNames.SPEED, 0.2, 0.2),
                   Gene(GeneNames.COLOR_R, 0.5, 0.5),
                   Gene(GeneNames.COLOR_G, 0.1, 0.1),
-                  Gene(GeneNames.COLOR_B, 0.1, 0.1)]
+                  Gene(GeneNames.COLOR_B, 0.1, 0.1),
+                  Gene(GeneNames.FERTILITY, 0.5, 0.5)]
         genes2 = [Gene(GeneNames.SPEED, -0.4, -0.4),
                   Gene(GeneNames.COLOR_R, -0.5, -0.5),
                   Gene(GeneNames.COLOR_G, -0.2, -0.2),
-                  Gene(GeneNames.COLOR_B, -0.2, -0.2)]
-        e1 = Entity().add_component(Biochemistry()).add_component(Movable()).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Genome(genes1))
-        e2 = Entity().add_component(Biochemistry()).add_component(Vision()).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Genome(genes2))
+                  Gene(GeneNames.COLOR_B, -0.2, -0.2),
+                  Gene(GeneNames.FERTILITY, -0.5, -0.5)]
+        e1 = Entity().add_component(Biochemistry()).add_component(Movable()).add_component(Breedable()).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Genome(genes1))
+        e2 = Entity().add_component(Biochemistry()).add_component(Vision()).add_component(Breedable()).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Genome(genes2))
         w = World()
 
         child = create_child(e1, e2, w)

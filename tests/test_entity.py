@@ -134,14 +134,13 @@ class TestEntity:
         bio = Biochemistry()
         e.add_component(bio)
         removed = e.remove_component(Biochemistry)
-        assert removed is None
+        assert removed is bio
         assert Biochemistry not in e.components
         assert Biochemistry not in e.components_dict
 
     def test_remove_component_missing(self):
         e = Entity()
-        with pytest.raises(KeyError):
-            e.remove_component(Biochemistry)
+        assert e.remove_component(Biochemistry) is None
 
     def test_chained_add_components(self):
         e = Entity().add_component(Biochemistry()).add_component(Movable())

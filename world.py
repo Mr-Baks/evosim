@@ -176,52 +176,52 @@ class World:
 
         return cells
 
-def add_component(self, entity, component):
-    if self.index.locked:
-        self.pending_component_addition.setdefault(entity, []).append(component)
-        return
-    
-    ctype = type(component)
-    if entity.has_component(ctype):
-        return
-    
-    entity.add_component(component, direct=False)
-    self.index.component_index.setdefault(ctype, set()).add(entity)
+    def add_component(self, entity, component):
+        if self.index.locked:
+            self.pending_component_addition.setdefault(entity, []).append(component)
+            return
 
-    if entity in self.index.entities:
+        ctype = type(component)
+        if entity.has_component(ctype):
+            return
+
+        entity.add_component(component, direct=False)
+        self.index.component_index.setdefault(ctype, set()).add(entity)
+
+        if entity in self.index.entities:
+            for key, cache in self.index.systems_cache.items():
+                if key.issubset(entity.components):
+                    cache.add(entity)
+
+    def remove_component(self, entity, component_type):
+        if self.index.locked:
+            self.pending_component_removal.setdefault(entity, []).append(component_type)
+            return
+
+        if not entity.has_component(component_type):
+            return
+
+        removed = entity.remove_component(component_type, direct=False)
+        self.index.component_index.get(component_type, set()).discard(entity)
+
         for key, cache in self.index.systems_cache.items():
-            if key.issubset(entity.components):
-                cache.add(entity)
+            if not key.issubset(entity.components):
+                cache.discard(entity)
 
-def remove_component(self, entity, component_type):
-    if self.index.locked:
-        self.pending_component_removal.setdefault(entity, []).append(component_type)
-        return 
-    
-    if not entity.has_component(component_type):
-        return 
-    
-    removed = entity.remove_component(component_type, direct=False)
-    self.index.component_index.get(component_type, set()).discard(entity)
+        return removed
 
-    for key, cache in self.index.systems_cache.items():
-        if not key.issubset(entity.components):
-            cache.discard(entity)
+    def flush_pending(self):
+        if self.index.locked: return
+        self.index.flush_pending()
 
-    return removed
+        for entity, comps in self.pending_component_removal.items():
+            for comp in comps:
+                self.remove_component(entity, type(comp))
 
-def flush_pending(self):
-    if self.index.locked: return
-    self.index.flush_pending()
+        for entity, comps in self.pending_component_addition.items():
+            for comp in comps:
+                self.add_component(entity, comp)
 
-    for entity, comps in self.pending_component_removal.items():
-        for comp in comps:
-            self.remove_component(entity, type(comp))
-
-    for entity, comps in self.pending_component_addition.items():
-        for comp in comps:
-            self.add_component(entity, comp)
-
-    self.pending_component_addition.clear()
-    self.pending_component_removal.clear()
+        self.pending_component_addition.clear()
+        self.pending_component_removal.clear()
 

@@ -22,8 +22,6 @@ def default_genes(**overrides) -> Genome:
     values = {
         GeneNames.SPEED: 0.0,
         GeneNames.METABOLISM: 0.0,
-        GeneNames.HUNGER_THRESHOLD: 0.0,
-        GeneNames.ENERGY_THRESHOLD: 0.0,
         GeneNames.HUNGER_DRIVE: 0.5,
         GeneNames.SLEEP_DRIVE: 0.0,
         GeneNames.MATING_DRIVE: 0.5,
