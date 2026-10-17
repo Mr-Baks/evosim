@@ -216,7 +216,8 @@ class World:
 
         for entity, comps in self.pending_component_removal.items():
             for comp in comps:
-                self.remove_component(entity, type(comp))
+                # `comp` is already a component type here.
+                self.remove_component(entity, comp)
 
         for entity, comps in self.pending_component_addition.items():
             for comp in comps:

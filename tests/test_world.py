@@ -344,3 +344,139 @@ class TestWorld:
         assert len(cells) == 8
         assert (4, 4) in cells
         assert (5, 5) not in cells
+
+
+class TestWorldComponentProxy:
+    """World.add_component / remove_component must keep QueryIndex in sync.
+
+    Structural changes are normally forbidden once an entity is indexed
+    (Entity.locked_direct_operation); World is the sanctioned entry point and
+    it also updates component_index and every affected systems_cache. While
+    the index is locked, changes are queued and later applied by
+    World.flush_pending.
+    """
+
+    def _world_with(self, *components):
+        world = World(10, 10)
+        entity = Entity()
+        for component in components:
+            entity.add_component(component)
+        world.place_entity(entity, 5, 5)
+        return world, entity
+
+    def test_add_component_updates_entity_index_and_cache(self):
+        world = World(10, 10)
+        world.index.register_system(frozenset([Biochemistry, Movable]))
+        cache = world.index.systems_cache[frozenset([Biochemistry, Movable])]
+        entity = Entity().add_component(Biochemistry())
+        world.place_entity(entity, 5, 5)
+        assert entity not in cache
+
+        world.add_component(entity, Movable())
+
+        assert entity.has_component(Movable)
+        assert entity in world.index.component_index[Movable]
+        assert entity in cache
+
+    def test_add_component_duplicate_is_ignored(self):
+        world, entity = self._world_with(Biochemistry(energy=50))
+        world.add_component(entity, Biochemistry(energy=10))
+        assert entity.get_component(Biochemistry).energy == 50
+
+    def test_remove_component_returns_component_and_updates_cache(self):
+        world = World(10, 10)
+        world.index.register_system(frozenset([Biochemistry, Movable]))
+        cache = world.index.systems_cache[frozenset([Biochemistry, Movable])]
+        entity = Entity().add_component(Biochemistry()).add_component(Movable())
+        world.place_entity(entity, 5, 5)
+        assert entity in cache
+
+        removed = world.remove_component(entity, Movable)
+
+        assert isinstance(removed, Movable)
+        assert not entity.has_component(Movable)
+        assert entity not in world.index.component_index[Movable]
+        assert entity not in cache
+
+    def test_remove_missing_component_returns_none(self):
+        world, entity = self._world_with(Biochemistry())
+        assert world.remove_component(entity, Movable) is None
+
+    def test_direct_mutation_after_indexing_raises(self):
+        world, entity = self._world_with(Biochemistry())
+        with pytest.raises(RuntimeError):
+            entity.add_component(Render())
+        with pytest.raises(RuntimeError):
+            entity.remove_component(Biochemistry)
+
+    def test_direct_mutation_before_indexing_is_allowed(self):
+        entity = Entity()
+        entity.add_component(Biochemistry())
+        assert entity.has_component(Biochemistry)
+
+    def test_deferred_component_addition_is_applied_on_flush(self):
+        world = World(10, 10)
+        world.index.register_system(frozenset([Biochemistry, Movable]))
+        cache = world.index.systems_cache[frozenset([Biochemistry, Movable])]
+        entity = Entity().add_component(Biochemistry())
+        world.place_entity(entity, 5, 5)
+
+        world.index.locked = True
+        world.add_component(entity, Movable())
+        assert not entity.has_component(Movable)
+        assert entity in world.pending_component_addition
+
+        world.index.locked = False
+        world.flush_pending()
+
+        assert entity.has_component(Movable)
+        assert entity in cache
+        assert world.pending_component_addition == {}
+
+    def test_deferred_component_removal_is_applied_on_flush(self):
+        world = World(10, 10)
+        world.index.register_system(frozenset([Biochemistry, Movable]))
+        cache = world.index.systems_cache[frozenset([Biochemistry, Movable])]
+        entity = Entity().add_component(Biochemistry()).add_component(Movable())
+        world.place_entity(entity, 5, 5)
+
+        world.index.locked = True
+        world.remove_component(entity, Movable)
+        assert entity.has_component(Movable)
+        assert entity in world.pending_component_removal
+
+        world.index.locked = False
+        world.flush_pending()
+
+        assert not entity.has_component(Movable)
+        assert entity not in world.index.component_index[Movable]
+        assert entity not in cache
+        assert world.pending_component_removal == {}
+
+    def test_flush_pending_while_locked_does_nothing(self):
+        world = World(10, 10)
+        entity = Entity().add_component(Biochemistry())
+        world.place_entity(entity, 5, 5)
+        world.index.locked = True
+        world.add_component(entity, Movable())
+
+        world.flush_pending()
+
+        assert not entity.has_component(Movable)
+        assert entity in world.pending_component_addition
+
+    def test_flush_pending_is_idempotent(self):
+        world = World(10, 10)
+        world.index.register_system(frozenset([Biochemistry, Movable]))
+        cache = world.index.systems_cache[frozenset([Biochemistry, Movable])]
+        entity = Entity().add_component(Biochemistry())
+        world.place_entity(entity, 5, 5)
+        world.index.locked = True
+        world.add_component(entity, Movable())
+        world.index.locked = False
+
+        world.flush_pending()
+        world.flush_pending()
+
+        assert entity.has_component(Movable)
+        assert entity in cache

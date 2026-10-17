@@ -312,3 +312,52 @@ class TestSimulationIntegration:
         fruits = sim.world.index.get_with(Eatable)
         assert len(fruits) == 1
         assert list(fruits)[0].get_component(Eatable).nutrition == 25
+
+
+class TestRunStopsOnTargetTick:
+    def test_run_stops_exactly_at_target_tick(self):
+        sim = Simulation(tickspeed=1000, fps=30, world_size=(5, 5))
+        # One frame with dt clamped to 0.25s == 250 ticks worth of accumulator.
+        times = iter([0.0, 0.25, 0.25, 0.25, 0.25, 0.25])
+        with patch('time.time', side_effect=lambda: next(times)):
+            with patch('time.sleep'):
+                sim.run(target_tick=5)
+
+        assert sim.tick == 5
+
+    def test_run_clamps_dt_to_quarter_second(self):
+        sim = Simulation(tickspeed=8, fps=30, world_size=(5, 5))  # tick_duration = 0.125s (exact)
+        calls = {'n': 0}
+
+        def counter(entities, world):
+            calls['n'] += 1
+
+        sim.register_system(frozenset([Biochemistry]), counter, priority=1)
+        sim.add_on_tick(lambda s: setattr(s, 'is_running', False))
+
+        # dt of 10s must be clamped to 0.25s -> only 2 ticks, not 80.
+        times = iter([0.0, 10.0, 10.0, 10.0, 10.0])
+        with patch('time.time', side_effect=lambda: next(times)):
+            with patch('time.sleep'):
+                sim.run()
+
+        assert calls['n'] == 2
+
+
+class TestHandleSystemsComponentChanges:
+    def test_handle_systems_applies_deferred_component_changes(self):
+        sim = Simulation(tickspeed=10, fps=30, world_size=(10, 10))
+        world = sim.world
+        entity = Entity().add_component(Biochemistry())
+        world.place_entity(entity, 5, 5)
+        world.index.register_system(frozenset([Render]))
+
+        def add_render(entities, world):
+            world.add_component(entity, Render(symbol='C'))
+
+        sim.register_system(frozenset([Biochemistry]), add_render, priority=1)
+
+        sim.handle_systems()
+
+        assert entity.has_component(Render)
+        assert entity in world.index.systems_cache[frozenset([Render])]

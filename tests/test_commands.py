@@ -1,8 +1,11 @@
+import math
+
 from commands import *
 from entity import *
 from world import World
 from event_bus import EventBus
 from genome import Gene, GeneNames
+from systems import command_system
 from tests.helpers import default_genes
 
 
@@ -437,5 +440,285 @@ class TestCreateChild:
         r = int(genome.get_phenotype(GeneNames.COLOR_R) * 128 + 128)
         g = int(genome.get_phenotype(GeneNames.COLOR_G) * 128 + 128)
         b = int(genome.get_phenotype(GeneNames.COLOR_B) * 128 + 128)
-        assert child.get_component(Movable).speed == genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5
+        assert math.isclose(
+            child.get_component(Movable).speed,
+            genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5,
+            rel_tol=1e-9,
+        )
         assert child.get_component(Render).color == (r, g, b)
+
+
+def _creature(world, x=5, y=5, speed=1):
+    entity = (
+        Entity()
+        .add_component(Movable(speed=speed))
+        .add_component(CommandQueue())
+        .add_component(State())
+    )
+    world.place_entity(entity, x, y)
+    return entity
+
+
+class TestCommandGroup:
+    def test_empty_subcommand_list_completes(self):
+        world = World(10, 10)
+        entity = _creature(world)
+        group = CommandGroup([])
+        queue = entity.get_component(CommandQueue)
+        queue.running = group
+
+        group.execute(entity, world)
+
+        assert group.status == CommandStatus.COMPLETED
+        assert queue.running is None
+
+    def test_takes_max_priority_and_emergency_from_children(self):
+        group = CommandGroup([
+            MoveToTargetCommand(x=1, y=1, priority=1, emergency=2),
+            MoveToTargetCommand(x=2, y=2, priority=5, emergency=3),
+        ])
+        assert group.priority == 5
+        assert group.emergency == 3
+
+    def test_skips_subcommand_that_is_not_ready(self):
+        world = World(10, 10)
+        entity = _creature(world, 5, 5)
+        group = CommandGroup([
+            EatCommand(target_x=9, target_y=9),   # out of reach -> not ready
+            MoveToTargetCommand(x=6, y=5),        # ready
+        ])
+        entity.get_component(CommandQueue).running = group
+
+        group.execute(entity, world)
+
+        assert isinstance(group._queue.running, MoveToTargetCommand)
+
+    def test_completes_when_no_subcommand_is_ready(self):
+        world = World(10, 10)
+        entity = _creature(world, 5, 5)
+        state = entity.get_component(State)
+        state.states.add('eat')
+        state.current = 'eat'
+        group = CommandGroup([EatCommand(target_x=9, target_y=9)], target_state='eat')
+        queue = entity.get_component(CommandQueue)
+        queue.running = group
+
+        group.execute(entity, world)
+
+        assert group.status == CommandStatus.COMPLETED
+        assert queue.running is None
+        assert state.current == 'idle'
+        assert 'eat' not in state.states
+
+    def test_propagates_own_target_state_to_subcommand(self):
+        world = World(10, 10)
+        entity = _creature(world, 5, 5)
+        group = CommandGroup([MoveToTargetCommand(x=8, y=5)], target_state='wander')
+        entity.get_component(CommandQueue).running = group
+
+        group.execute(entity, world)
+
+        assert group._queue.running.target_state == 'wander'
+
+    def test_inherits_target_state_from_subcommand(self):
+        world = World(10, 10)
+        entity = _creature(world, 5, 5)
+        group = CommandGroup([MoveToTargetCommand(x=8, y=5, target_state='wander')])
+        entity.get_component(CommandQueue).running = group
+
+        group.execute(entity, world)
+
+        assert group.target_state == 'wander'
+
+    def test_interruption_cancels_children(self):
+        world = World(10, 10)
+        entity = _creature(world, 5, 5)
+        running_sub = MoveToTargetCommand(x=8, y=5)
+        queued_sub = MoveToTargetCommand(x=9, y=5)
+        group = CommandGroup([running_sub, queued_sub])
+        group._queue.running = running_sub
+        running_sub.target_status = CommandStatus.RUNNING
+        entity.get_component(CommandQueue).running = group
+
+        group.on_interruption(entity)
+
+        assert queued_sub.target_status == CommandStatus.CANCELLED
+        assert running_sub.target_status == CommandStatus.INTERRUPTED
+        assert group.status == CommandStatus.INTERRUPTED
+
+    def test_executes_move_then_eat_in_order(self):
+        world = World(10, 10)
+        entity = _creature(world, 1, 1)
+        food = Entity().add_component(Eatable(nutrition=20))
+        world.place_entity(food, 2, 2)
+
+        push_command(
+            entity, world,
+            MoveToTargetCommand(x=1, y=2),
+            EatCommand(target_x=2, target_y=2, target_state='eat'),
+            target_state='eat',
+        )
+        queue = entity.get_component(CommandQueue)
+        assert isinstance(queue.queue[0], CommandGroup)
+
+        for _ in range(5):
+            command_system({entity}, world)
+
+        assert world.get_entity(2, 2) is None            # food was eaten
+        assert queue.running is None                     # group finished
+        assert entity.get_component(State).current == 'idle'
+
+
+class TestPushCommand:
+    def test_single_command_is_not_wrapped(self):
+        world = World(10, 10)
+        entity = _creature(world)
+        push_command(entity, world, MoveToTargetCommand(x=6, y=5), target_state='move')
+        queue = entity.get_component(CommandQueue)
+        assert len(queue.queue) == 1
+        assert isinstance(queue.queue[0], MoveToTargetCommand)
+        assert queue.queue[0].target_state == 'move'
+
+    def test_multiple_commands_are_wrapped_in_group(self):
+        world = World(10, 10)
+        entity = _creature(world)
+        push_command(
+            entity, world,
+            MoveToTargetCommand(x=6, y=5),
+            EatCommand(target_x=6, target_y=5, target_state='eat'),
+            target_state='eat',
+        )
+        queue = entity.get_component(CommandQueue)
+        assert len(queue.queue) == 1
+        assert isinstance(queue.queue[0], CommandGroup)
+        assert queue.queue[0].target_state == 'eat'
+
+    def test_higher_emergency_command_interrupts_running(self):
+        world = World(10, 10)
+        entity = _creature(world, 5, 5)
+        low = MoveToTargetCommand(x=8, y=5, emergency=0)
+        queue = entity.get_component(CommandQueue)
+        queue.running = low
+        low.status = CommandStatus.RUNNING
+
+        high = MoveToTargetCommand(x=2, y=5, emergency=5)
+        push_command(entity, world, high)
+
+        assert queue.running is high
+        assert high.status == CommandStatus.RUNNING
+        assert low.target_status == CommandStatus.INTERRUPTED
+
+
+class TestMoveToTargetPathfinding:
+    def test_start_equals_goal_returns_empty_path(self):
+        world = World(5, 5)
+        entity = _creature(world, 2, 2)
+        command = MoveToTargetCommand(x=2, y=2)
+        assert command._find_path(world, (2, 2), ignore_entity=entity) == []
+
+    def test_path_avoids_other_entities(self):
+        world = World(5, 5)
+        entity = _creature(world, 1, 1)
+        world.place_entity(Entity().add_component(Biochemistry()), 1, 2)
+        command = MoveToTargetCommand(x=1, y=3)
+
+        path = command._find_path(world, (1, 1), ignore_entity=entity)
+
+        assert path
+        assert path[-1] == (1, 3)
+        assert (1, 2) not in path
+        assert all(world.get_entity(*cell) is None for cell in path)
+
+    def test_path_goes_around_a_wall(self):
+        world = World(7, 7)
+        entity = _creature(world, 0, 3)
+        for y in range(1, 7):                    # wall at x=3 with a gap at (3, 0)
+            world.place_entity(Entity().add_component(Biochemistry()), 3, y)
+        command = MoveToTargetCommand(x=6, y=3)
+
+        path = command._find_path(world, (0, 3), ignore_entity=entity)
+
+        assert path
+        assert path[-1] == (6, 3)
+        assert all(world.get_entity(*cell) is None for cell in path)
+
+    def test_fully_enclosed_goal_is_unreachable(self):
+        world = World(5, 5)
+        entity = _creature(world, 0, 0)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                world.place_entity(Entity().add_component(Biochemistry()), 2 + dx, 2 + dy)
+        command = MoveToTargetCommand(x=2, y=2)
+
+        assert command._find_path(world, (0, 0), ignore_entity=entity) == []
+
+    def test_high_speed_takes_multiple_steps_per_tick(self):
+        world = World(10, 10)
+        entity = _creature(world, 0, 0, speed=2)
+        command = MoveToTargetCommand(x=4, y=0)
+        entity.get_component(CommandQueue).running = command
+
+        command.execute(entity, world)
+        assert entity.x == 2
+        assert command.status == CommandStatus.PENDING
+
+        command.execute(entity, world)
+        assert entity.x == 4
+        assert command.status == CommandStatus.COMPLETED
+
+    def test_low_speed_accumulates_before_stepping(self):
+        world = World(10, 10)
+        entity = _creature(world, 0, 0, speed=0.5)
+        command = MoveToTargetCommand(x=3, y=0)
+        entity.get_component(CommandQueue).running = command
+
+        command.execute(entity, world)
+        assert entity.x == 0
+        assert command.status == CommandStatus.PENDING
+
+        command.execute(entity, world)
+        assert entity.x == 1
+
+    def test_replans_when_next_cell_becomes_blocked(self):
+        world = World(6, 6)
+        entity = _creature(world, 0, 0)
+        command = MoveToTargetCommand(x=3, y=0)
+        entity.get_component(CommandQueue).running = command
+
+        command.execute(entity, world)
+        assert entity.x == 1
+
+        world.place_entity(Entity().add_component(Biochemistry()), 2, 0)
+        command.execute(entity, world)
+
+        assert command.path == []
+        assert command.path_retry_count == 1
+        assert entity.x == 1
+
+
+class TestWanderCommand:
+    def test_inverts_direction_when_target_out_of_bounds(self, monkeypatch):
+        import commands
+        monkeypatch.setattr(commands.random, 'uniform', lambda a, b: 0.0)  # angle 0 -> +x
+        world = World(5, 5)
+        entity = _creature(world, 4, 0)
+
+        WanderCommand(radius=4).execute(entity, world)
+
+        queued = entity.get_component(CommandQueue).queue[-1]
+        assert isinstance(queued, MoveToTargetCommand)
+        assert (queued.x, queued.y) == (0, 0)
+
+    def test_clamps_target_when_both_directions_out_of_bounds(self, monkeypatch):
+        import commands
+        monkeypatch.setattr(commands.random, 'uniform', lambda a, b: 0.0)
+        world = World(5, 5)
+        entity = _creature(world, 0, 0)
+
+        WanderCommand(radius=10).execute(entity, world)
+
+        queued = entity.get_component(CommandQueue).queue[-1]
+        assert 0 <= queued.x < world.width
+        assert 0 <= queued.y < world.height
