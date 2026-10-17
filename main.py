@@ -12,8 +12,6 @@ def make_creature(x, y, world: World, color=(80, 120, 200)):
     genes = []
 
     genes.append(Gene(GeneNames.SPEED, -0.6, -0.6, dominant=False))
-    genes.append(Gene(GeneNames.ENERGY_THRESHOLD, -0.3, -0.3))
-    genes.append(Gene(GeneNames.HUNGER_THRESHOLD, -0.3, -0.3))
     genes.append(Gene(GeneNames.HUNGER_DRIVE, 0.5, 0.5))
     genes.append(Gene(GeneNames.SLEEP_DRIVE, 0.5, 0.5))
     genes.append(Gene(GeneNames.EXPLORATION_DRIVE, 0.5, 0.5))
@@ -73,4 +71,4 @@ for _ in range(40):
     if not s.world.get_entity(x, y):
         make_creature(x, y, s.world)
 
-s.run(target_tick=120)
+s.run(target_tick=1200)

@@ -117,7 +117,7 @@ def mate_utility(entity: Entity, world: World) -> float:
     
     genetic_drive = (genome.get_phenotype(GeneNames.MATING_DRIVE) + 1) / 2
 
-    fertility = (genome.get_phenotype(GeneNames.FERTILITY) + 1) / 2
+    fertility = breedable.fertility
     if fertility < 0.2: fertility = 0
     
     return biochemistry_factor * partner_factor * genetic_drive * fertility

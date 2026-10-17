@@ -34,8 +34,6 @@ class GeneNames:
     COLOR_R = 'color_r'
     COLOR_G = 'color_g'
     COLOR_B = 'color_b'
-    HUNGER_THRESHOLD = 'hunger_threshold'
-    ENERGY_THRESHOLD = 'energy_threshold'
     HUNGER_DRIVE = 'hunger_drive'
     SLEEP_DRIVE = 'sleep_drive'
     MATING_DRIVE = 'mating_drive'
@@ -67,9 +65,16 @@ class Genome(Component):
 
     def recombine(self, genome: Genome, mutation_rate: float = 0.9, strength: float = 0.9) -> Genome:
         genes = []
+        gene_names = set(self.genes.keys()).union(set(genome.genes.keys()))
 
-        for name in self.genes:
-            genes.append(self.genes[name].crossover(genome.genes[name], mutation_rate=mutation_rate, strength=strength))
+        for name in gene_names:
+            gene1 = self.genes.get(name)
+            gene2 = genome.genes.get(name)
+
+            if not gene1 or not gene2:
+                raise ValueError(f'Different genomes. Gene {name} not in genome of both parents.')
+            
+            genes.append(gene1.crossover(gene2, mutation_rate=mutation_rate, strength=strength))
 
         return Genome(genes)
     

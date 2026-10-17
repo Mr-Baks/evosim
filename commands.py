@@ -329,6 +329,9 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
     movable = child.get_component(Movable)
     movable.speed = genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5
 
+    breeadable = child.get_component(Breedable)
+    breeadable.fertility = (1 + genome.get_phenotype(GeneNames.FERTILITY)) / 2
+
     with open('logs/log.txt', 'a') as log:
         log.write(f'Mating at {parent2.x}, {parent2.y}\n')
 
