@@ -53,7 +53,7 @@ def tick_stats(sim: Simulation):
     creatures_amount = len(sim.world.index.get_with(Movable))
 
     speeds = [e.get_component(Movable).speed for e in sim.world.index.get_with(Movable)]
-    avg_speed = sum(speeds) / len(speeds)
+    avg_speed = sum(speeds) / len(speeds) if len(speeds) > 0 else 0
 
     print(f'creatures: {creatures_amount} | food: {food_amount} | avg speed: {avg_speed}')
 
