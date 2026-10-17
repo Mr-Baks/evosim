@@ -1,8 +1,18 @@
+# Python bytecode / caches
 __pycache__/
+*.py[cod]
+*.pyo
+
+# Tooling caches
 .pytest_cache/
-*.pyc
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
 .idea/
 .vscode/
 .DS_Store
-*.log
-logs/
+
+# Logs: ignore the contents of logs/ but keep the directory itself
+logs/*
+!logs/.gitkeep
