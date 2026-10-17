@@ -81,7 +81,7 @@ def eat_utility(entity: Entity, world: World) -> float:
     food_count = sum(1 for ve in vision.visibles if ve.has_component(Eatable))
     food_factor = max(0.01, min(food_count / 3, 1))
     
-    genetic_drive = (genome.get_phenotype(GeneNames.HUNGER_DRIVE) + 1) / 2
+    genetic_drive = genome.get_phenotype(GeneNames.HUNGER_DRIVE, (0, 1))
     
     return hunger_factor * food_factor * genetic_drive
 
@@ -90,7 +90,7 @@ def sleep_utility(entity: Entity, world: World) -> float:
     genome: Genome = entity.get_component(Genome)
     
     energy_factor = 1 - (bio.energy / 200)
-    genetic_drive = (genome.get_phenotype(GeneNames.SLEEP_DRIVE) + 1) / 2
+    genetic_drive = genome.get_phenotype(GeneNames.SLEEP_DRIVE, (0, 1))
     
     return energy_factor * genetic_drive
 
@@ -103,8 +103,8 @@ def mate_utility(entity: Entity, world: World) -> float:
     if breedable is None:
         return -1
 
-    energy_threshold = 100 * genome.get_phenotype(GeneNames.MATING_ENERGY_THRESHOLD) + 100
-    hunger_threshold = 100 * genome.get_phenotype(GeneNames.MATING_HUNGER_THRESHOLD) + 100
+    energy_threshold = genome.get_phenotype(GeneNames.MATING_ENERGY_THRESHOLD, (0, 200))
+    hunger_threshold = genome.get_phenotype(GeneNames.MATING_HUNGER_THRESHOLD, (0, 200))
     cooldown = breedable.cooldown
 
     if bio.energy < energy_threshold or bio.hunger < hunger_threshold or cooldown > 0:
@@ -115,7 +115,7 @@ def mate_utility(entity: Entity, world: World) -> float:
     partner_count = sum(1 for ve in vision.visibles if ve.has_component(Breedable))
     partner_factor = min(partner_count / 3, 1)
     
-    genetic_drive = (genome.get_phenotype(GeneNames.MATING_DRIVE) + 1) / 2
+    genetic_drive = genome.get_phenotype(GeneNames.MATING_DRIVE, (0, 1))
 
     fertility = breedable.fertility
     if fertility < 0.2: fertility = 0
@@ -135,7 +135,7 @@ def wander_utility(entity: Entity, world: World) -> float:
     plant_count = sum(1 for ve in vision.visibles if ve.has_component(Plant))
     plant_factor = 1 - min(plant_count / 5, 1)
     
-    genetic_drive = (genome.get_phenotype(GeneNames.EXPLORATION_DRIVE) + 1) / 2
+    genetic_drive = genome.get_phenotype(GeneNames.EXPLORATION_DRIVE, (0, 1))
     
     return biochemistry_factor * plant_factor * genetic_drive * creatures_factor
 

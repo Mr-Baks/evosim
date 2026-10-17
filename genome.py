@@ -1,4 +1,3 @@
-from abc import ABC
 import random
 from typing import Optional
 from entity import Component
@@ -38,8 +37,8 @@ class GeneNames:
     SLEEP_DRIVE = 'sleep_drive'
     MATING_DRIVE = 'mating_drive'
     EXPLORATION_DRIVE = 'exploration_drive'
-    MATING_HUNGER_THRESHOLD = 'mating_hunger_treshold'
-    MATING_ENERGY_THRESHOLD = 'mating_energy_treshold'
+    MATING_HUNGER_THRESHOLD = 'mating_hunger_threshold'
+    MATING_ENERGY_THRESHOLD = 'mating_energy_threshold'
     FERTILITY = 'fertility'
 
 class Genome(Component):
@@ -58,12 +57,17 @@ class Genome(Component):
             return self.genes.pop(name)
         return None
 
-    def get_phenotype(self, name: str) -> Optional[float]:
+    def get_phenotype(self, name: str, scaling: tuple[None | float, None | float] = (None, None), default: float = None) -> Optional[float]:
         if name in self.genes:
-            return self.genes[name].phenotype
-        return None
+            raw_phenotype = self.genes[name].phenotype
+            smin, smax = scaling
+            if smin is None or smax is None:
+                return raw_phenotype
+            phenotype = ((raw_phenotype + 1) * (smax - smin) / 2) + smin
+            return phenotype
+        return default
 
-    def recombine(self, genome: Genome, mutation_rate: float = 0.9, strength: float = 0.9) -> Genome:
+    def recombine(self, genome: Genome, mutation_rate: float = 0.1, strength: float = 0.3) -> Genome:
         genes = []
         gene_names = set(self.genes.keys()).union(set(genome.genes.keys()))
 
@@ -77,5 +81,3 @@ class Genome(Component):
             genes.append(gene1.crossover(gene2, mutation_rate=mutation_rate, strength=strength))
 
         return Genome(genes)
-    
-

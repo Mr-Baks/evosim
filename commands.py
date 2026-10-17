@@ -321,17 +321,17 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
 
     child.add_component(genome)
 
-    r = int(genome.get_phenotype(GeneNames.COLOR_R) * 128 + 128)
-    g = int(genome.get_phenotype(GeneNames.COLOR_G) * 128 + 128)
-    b = int(genome.get_phenotype(GeneNames.COLOR_B) * 128 + 128)
+    r = int(genome.get_phenotype(GeneNames.COLOR_R, (0, 256)))
+    g = int(genome.get_phenotype(GeneNames.COLOR_G, (0, 256)))
+    b = int(genome.get_phenotype(GeneNames.COLOR_B, (0, 256)))
 
     render.color = (r, g, b)
 
     movable = child.get_component(Movable)
-    movable.speed = genome.get_phenotype(GeneNames.SPEED) * 2.5 + 2.5
+    movable.speed = genome.get_phenotype(GeneNames.SPEED, (0, 5))
 
     breeadable = child.get_component(Breedable)
-    breeadable.fertility = (1 + genome.get_phenotype(GeneNames.FERTILITY)) / 2
+    breeadable.fertility = genome.get_phenotype(GeneNames.FERTILITY, (0, 1))
 
     with open('logs/log.txt', 'a') as log:
         log.write(f'Mating at {parent2.x}, {parent2.y}\n')
