@@ -55,6 +55,7 @@ class Entity:
         self.y = y
         self.components: set[Component] = set()
         self.components_dict: dict[type[Component], Component] = {}
+        self.locked_direct_operation = False
 
     def has_component(self, component_type: type[Component]) -> bool:
         """Checks availability of component type"""
@@ -64,13 +65,21 @@ class Entity:
         """Returns components if entity has that type, else None"""
         return self.components_dict.get(component_type)
 
-    def add_component(self, component: Component) -> Entity:
+    def add_component(self, component: Component, direct: bool = True) -> Entity:
         """Adds a component to entity"""
+        if self.locked_direct_operation and direct:
+            raise RuntimeError("Operation add_component was called directly passing World's proxy after addition to QueryIndex. Please use World.add_component() instead this")
+        
         self.components_dict[type(component)] = component
         self.components.add(type(component))
         return self
 
-    def remove_component(self, component_type: type[Component]) -> Optional[Component]:
-        """Removes component from entity"""
-        self.components_dict.pop(component_type)
+    def remove_component(self, component_type: type[Component], direct: bool = True) -> Optional[Component]:
+        """Removes a component from entity"""
+        if self.locked_direct_operation and direct:
+            raise RuntimeError("Operation remove_component was called directly passing World's proxy after addition to QueryIndex. Please use World.remove_component() instead this")
+                
         self.components.discard(component_type)
+        component = self.components_dict.pop(component_type, None)
+
+        return component

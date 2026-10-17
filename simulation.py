@@ -27,7 +27,7 @@ class Simulation:
         for _, req_comps, system in self.systems:
             system(self.world.index.systems_cache[req_comps], self.world)
         self.world.index.locked = False
-        self.world.index.flush_pending()
+        self.world.flush_pending()
 
     def add_on_tick(self, callback: callable) -> None:
         self.on_tick_callbacks.append(callback)
