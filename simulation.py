@@ -76,6 +76,7 @@ class Simulation:
 
                 if self.tick == target_tick:
                     self.is_running = False
+                    break
 
                 for c in self.on_tick_callbacks:
                     c(self)
