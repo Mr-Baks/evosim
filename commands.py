@@ -164,6 +164,7 @@ class DeathCommand(Command):
             corpse = Entity().add_component(Eatable(self.corpse_nutrition)).add_component(Render(symbol='D', color=(255, 0, 0)))
             world.place_entity(corpse, entity.x, entity.y)
 
+        self.complete(entity, status=CommandStatus.COMPLETED)
         with open('logs/log.txt', 'a') as log:
             bio: Biochemistry = entity.get_component(Biochemistry)
             log.write(f'died at {entity.x}, {entity.y} | Hunger: {bio.hunger}, energy: {bio.energy} \n')
