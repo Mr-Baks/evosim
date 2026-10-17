@@ -79,7 +79,7 @@ def eat_utility(entity: Entity, world: World) -> float:
     hunger_factor = 1 - (bio.hunger / 200)
     
     food_count = sum(1 for ve in vision.visibles if ve.has_component(Eatable))
-    food_factor = max(0.6, min(food_count / 3, 1))
+    food_factor = max(0.01, min(food_count / 3, 1))
     
     genetic_drive = (genome.get_phenotype(GeneNames.HUNGER_DRIVE) + 1) / 2
     
@@ -103,14 +103,14 @@ def mate_utility(entity: Entity, world: World) -> float:
     if breedable is None:
         return -1
 
-    energy_threshold = genome.get_phenotype(GeneNames.MATING_ENERGY_THRESHOLD)
-    hunger_threshold = genome.get_phenotype(GeneNames.MATING_HUNGER_THRESHOLD)
+    energy_threshold = 100 * genome.get_phenotype(GeneNames.MATING_ENERGY_THRESHOLD) + 100
+    hunger_threshold = 100 * genome.get_phenotype(GeneNames.MATING_HUNGER_THRESHOLD) + 100
     cooldown = breedable.cooldown
 
     if bio.energy < energy_threshold or bio.hunger < hunger_threshold or cooldown > 0:
         return -1
     
-    biochemistry_factor = 1 - ((bio.hunger + bio.energy) / 400)
+    biochemistry_factor = ((bio.hunger + bio.energy) / 400)
     
     partner_count = sum(1 for ve in vision.visibles if ve.has_component(Breedable))
     partner_factor = min(partner_count / 3, 1)
@@ -130,14 +130,14 @@ def wander_utility(entity: Entity, world: World) -> float:
     biochemistry_factor = 1 - ((bio.hunger + bio.energy) / 400)
     
     creatures_count = sum(1 for ve in vision.visibles if ve.has_component(Movable))
-    creatures_factor = 1 - min(creatures_count / 5, 1)
+    creatures_factor = 1 - max(creatures_count / 5, 0.01)
 
     plant_count = sum(1 for ve in vision.visibles if ve.has_component(Plant))
     plant_factor = 1 - min(plant_count / 5, 1)
     
     genetic_drive = (genome.get_phenotype(GeneNames.EXPLORATION_DRIVE) + 1) / 2
     
-    return biochemistry_factor * plant_factor * genetic_drive
+    return biochemistry_factor * plant_factor * genetic_drive * creatures_factor
 
 def logging_system(entities: set[Entity], world: World):
     log = ''
