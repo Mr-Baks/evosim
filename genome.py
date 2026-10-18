@@ -78,7 +78,11 @@ class Genome(Component):
 
     def recombine(self, genome: Genome, mutation_rate: float = 0.1, strength: float = 0.3) -> Genome:
         genes = []
-        gene_names = set(self.genes.keys()).union(set(genome.genes.keys()))
+        # Deterministic order: iterating a set of names depends on
+        # PYTHONHASHSEED, and since crossover consumes a shared RNG stream the
+        # order changes the offspring. Sorting makes recombination
+        # reproducible across processes and machines.
+        gene_names = sorted(set(self.genes.keys()).union(set(genome.genes.keys())))
 
         for name in gene_names:
             gene1 = self.genes.get(name)

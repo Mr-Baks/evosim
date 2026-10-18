@@ -172,3 +172,65 @@ class TestRecombine:
         gene = child.genes['a']
         assert gene.allele1 in (0.2, 0.8)
         assert gene.allele2 in (0.2, 0.8)
+
+    # --- Determinism -----------------------------------------------------
+    # Crossover draws from a shared, sequential RNG stream, so any dependence
+    # on the iteration order of gene names would make offspring depend on
+    # PYTHONHASHSEED. These tests pin the order-independent behaviour.
+
+    _SPECS = {
+        'a': (-0.3, 0.7),
+        'b': (0.2, -0.4),
+        'c': (0.1, 0.9),
+        'd': (-0.5, 0.5),
+        'e': (0.3, -0.2),
+        'f': (-0.8, 0.6),
+    }
+    _ORDER = ['a', 'b', 'c', 'd', 'e', 'f']
+
+    def _child_fingerprint(self, gene_order):
+        def parent(shift):
+            return Genome([
+                Gene(name, self._SPECS[name][0] + shift, self._SPECS[name][1] + shift,
+                     dominant=False)
+                for name in gene_order
+            ])
+
+        random.seed(42)
+        child = parent(0.0).recombine(parent(0.05))
+        return {name: (round(g.allele1, 9), round(g.allele2, 9))
+                for name, g in child.genes.items()}
+
+    def test_recombine_independent_of_gene_insertion_order(self):
+        forward = self._child_fingerprint(self._ORDER)
+        backward = self._child_fingerprint(list(reversed(self._ORDER)))
+        assert forward == backward
+
+    def test_recombine_independent_of_python_hash_seed(self):
+        import os
+        import subprocess
+        import sys
+
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        program = (
+            "import json\n"
+            "import random\n"
+            "from genome import Gene, Genome\n"
+            "specs = [('a', -0.3, 0.7), ('b', 0.2, -0.4), ('c', 0.1, 0.9),\n"
+            "         ('d', -0.5, 0.5), ('e', 0.3, -0.2), ('f', -0.8, 0.6)]\n"
+            "mk = lambda s: Genome([Gene(n, a + s, b + s, dominant=False) for n, a, b in specs])\n"
+            "random.seed(42)\n"
+            "child = mk(0.0).recombine(mk(0.05))\n"
+            "print(json.dumps(sorted((g.name, round(g.allele1, 9), round(g.allele2, 9))\n"
+            "                        for g in child.genes.values())))\n"
+        )
+
+        def fingerprint(hash_seed):
+            env = dict(os.environ, PYTHONHASHSEED=str(hash_seed))
+            out = subprocess.check_output(
+                [sys.executable, '-c', program], cwd=repo_root, env=env,
+            )
+            return out.decode().strip()
+
+        fingerprints = {fingerprint(seed) for seed in range(4)}
+        assert len(fingerprints) == 1
