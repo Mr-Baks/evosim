@@ -1,6 +1,7 @@
 from typing import Optional
 from entity import *
 from event_bus import EventBus
+import random
 
 
 class QueryIndex:
@@ -166,6 +167,10 @@ class World:
                 free_cells.append((nx, ny))
 
         return free_cells
+
+    def get_free_cell_near(self, entity: Entity, radius: int = 1) -> tuple[int, int] | None:
+        free_cells = self.get_free_cells_near(entity, radius)
+        return random.choice(free_cells) if free_cells else None
     
     def get_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         cells = []

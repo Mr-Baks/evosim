@@ -201,9 +201,9 @@ def decision_system(entities: set[Entity], world: World):
             if food_candidates:
                 food_candidates.sort(key=lambda f: abs(e.x - f.x) + abs(e.y - f.y))
                 for f in food_candidates:
-                    free_cells = world.get_free_cells_near(f)
-                    if free_cells and random.random() > 0.3:
-                        tx, ty = free_cells[0]
+                    free_cell = world.get_free_cell_near(f)
+                    if free_cell and random.random() > 0.3:
+                        tx, ty = free_cell
                         push_command(e, world, 
                                      MoveToTargetCommand(x=tx, y=ty, emergency=15), 
                                      EatCommand(target_x=f.x, target_y=f.y, emergency=16, target_state=action),
@@ -223,9 +223,9 @@ def decision_system(entities: set[Entity], world: World):
             if partners:
                 partners.sort(key=lambda p: abs(e.x - p.x) + abs(e.y - p.y))
                 for p in partners:
-                    free_cells = world.get_free_cells_near(p)
-                    if free_cells:
-                        tx, ty = free_cells[0]
+                    free_cell = world.get_free_cell_near(p)
+                    if free_cell:
+                        tx, ty = free_cell
                         push_command(e, world, 
                                      MoveToTargetCommand(x=tx, y=ty, emergency=1),
                                      MateCommand(partner=p, emergency=2),
