@@ -353,6 +353,6 @@ class MateCommand(Command):
         if free_cells and child:
             x, y = free_cells[0]
             world.place_entity(child, x, y)
-        entity.get_component(Breedable).cooldown = 200
-        self.partner.get_component(Breedable).cooldown = 200
+        entity.get_component(Breedable).cooldown = 100 + entity.get_component(Genome).get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
+        self.partner.get_component(Breedable).cooldown = 100 + self.partner.get_component(Genome).get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
         self.complete(entity)

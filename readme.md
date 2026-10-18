@@ -17,11 +17,14 @@ heredity-based genetics.
 - **Vision system** – each creature perceives nearby entities within a radius
 - **Biochemistry** – energy, hunger and health with metabolism, regeneration,
   starvation and death (leaving a corpse)
+- **Senescence** – accumulated wear with age lowers vitality, max health and
+  fertility, so old age emerges from biochemistry rather than a hard timer
 - **Genetics** – `Genome` of `Gene`s with allele dominance, phenotype scaling,
   crossover with clamped mutation, and recombination
 - **Utility-based AI** – decisions pick the highest-utility action
   (eat / sleep / mate / wander) weighted by genetic drives
-- **Reproduction** – mating with cooldown, offspring recombine both genomes
+- **Reproduction** – mating with a lifespan-linked cooldown, offspring recombine
+  both genomes
 - **Plants** – stationary energy sources that grow and drop fruit
 - **Modular & extensible** – add components, commands, genes or event handlers
   without touching the core loop
@@ -31,7 +34,7 @@ heredity-based genetics.
 ```
 Entity
   ├── Movable       (speed, movement_accumulator)
-  ├── Biochemistry  (energy, hunger, health)
+  ├── Biochemistry  (energy, hunger, health, max_health, vitality, age)
   ├── Vision        (radius, visibles)
   ├── CommandQueue  (queue, running)
   ├── State         (current, states)
@@ -44,7 +47,7 @@ Systems registered in main.py (higher priority runs first):
   - vision_system        – populates Vision.visibles                  (priority 200)
   - decision_system      – utility-based AI, pushes commands         (priority 100)
   - plant_system         – grows plants, spawns fruit                 (priority 75)
-  - biochemistry_system  – metabolism, regeneration, death            (priority 70)
+  - biochemistry_system  – ageing/wear, metabolism, regeneration, death (priority 70)
   - command_system       – executes the running command               (priority 50)
   - logging_system       – dumps per-entity utilities to logs/        (priority 0)
 
@@ -108,9 +111,12 @@ components.
 ```python
 @dataclass
 class Biochemistry(Component):
-    energy: int = 100
-    hunger: int = 100
-    health: int = 100
+    energy: float = 100
+    hunger: float = 100
+    health: float = 100
+    max_health: float = 100   # scales with vitality
+    vitality: float = 1       # 1 at birth, 0 at the end of life
+    age: float = 0            # chronological age in ticks
 ```
 
 **System** – a function that processes all entities having a specific component
@@ -153,27 +159,35 @@ usually rescale them via `Genome.get_phenotype`:
 
 | Name | Usage | Scale |
 |------|-------|-------|
-| `speed` | Energy/hunger drain rate (`biochemistry_system`) and, via `create_child`, `Movable.speed` | raw for metabolism; `(0, 5)` for movement |
-| `metabolism` | Multiplier in metabolism, drain, regen and healing | raw |
+| `speed` | Energy/hunger drain rate (`biochemistry_system`) and, via `create_child`, `Movable.speed` | `(1, 3)` for drain; `(0, 5)` for movement |
+| `metabolism` | Multiplier in metabolism, drain and regeneration cost | `(0.01, 2)`, log |
 | `hunger_drive` | Weight of the `eat` utility | `(0, 1)` |
 | `sleep_drive` | Weight of the `sleep` utility | `(0, 1)` |
 | `mating_drive` | Weight of the `mating` utility | `(0, 1)` |
 | `exploration_drive` | Weight of the `idle`/wander utility | `(0, 1)` |
 | `mating_energy_threshold` | Minimum energy required to mate | `(0, 200)` |
 | `mating_hunger_threshold` | Minimum hunger required to mate | `(0, 200)` |
-| `fertility` | Offspring `Breedable.fertility` | `(0, 1)` |
+| `fertility` | Base fertility; scaled by vitality into `Breedable.fertility` | `(0, 1)` |
+| `senescence_shape` | Weibull shape `a` of the wear curve; `1` = no senescence | `(1, 3)` |
+| `wear_resistance` | Characteristic lifespan `L` in ticks; vitality hits 0 at `age = L` | `(180, 700)`, log |
+| `regeneration_threshold` | Health fraction below which healing starts | `(0, 1)` |
+| `regeneration_increase` | Strength (and cost) of healing per tick | `(1, 5)` |
 | `color_r`, `color_g`, `color_b` | Offspring render colour | `(0, 256)` |
 
 **Genome** – component holding a `dict[str, Gene]`.
 
 ```python
-genome.get_phenotype(name, scaling=(None, None), default=None)
+genome.get_phenotype(name, scaling=None, default=None, log=False)
 ```
 
-- Without scaling (or with a `None` bound) it returns the raw phenotype.
+- Without scaling it returns the raw phenotype (a value in `[-1, 1]`).
 - With `scaling=(lo, hi)` it maps the raw `[-1, 1]` phenotype linearly onto
   `[lo, hi]`: `((raw + 1) * (hi - lo) / 2) + lo`.
-- Returns `default` when the gene is absent.
+- With `log=True` it maps **geometrically** instead:
+  `lo * (hi / lo) ** ((raw + 1) / 2)`. Use this for multiplicative/scale
+  traits (lifespan, metabolism) and the linear form for shapes, fractions
+  and offsets.
+- Returns `default` (defaults to `None`) when the gene is absent.
 
 ```python
 genome1.recombine(genome2, mutation_rate=0.1, strength=0.3) -> Genome
@@ -252,9 +266,9 @@ def _find_path(self, world, start, ignore_entity=None):
 | `State` | `current: str`, `states: set[str]` | Current action + active state set |
 | `Render` | `symbol: str`, `color: (r,g,b)`, `is_visible: bool` | Console rendering |
 | `Movable` | `speed: float`, `movement_accumulator: float` | Movement (steps accumulate) |
-| `Biochemistry` | `energy: int`, `hunger: int`, `health: int` | Vital stats |
+| `Biochemistry` | `energy: float`, `hunger: float`, `health: float`, `max_health: float`, `vitality: float`, `age: float` | Vital stats + ageing |
 | `Eatable` | `nutrition: int` | Food value |
-| `Breedable` | `fertility: float`, `cooldown: int` | Reproduction (`fertility` defaults to `100`, but offspring receive a value in `[0, 1]`) |
+| `Breedable` | `fertility: float`, `cooldown: int` | Reproduction (`fertility` defaults to `1`; scaled by vitality each tick) |
 | `Vision` | `radius: int`, `visibles: set[Entity]` | Perception |
 | `Plant` | `energy: int`, `energy_increase: int`, `fructify_threshold: int`, `fruit_nutrition: int` | Plant growth |
 | `Genome` | `genes: dict[str, Gene]` | Heritable genetic data |
@@ -266,7 +280,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `vision_system` | `Vision` | 200 | Populates `Vision.visibles` with neighbours in radius |
 | `decision_system` | `CommandQueue`, `State` | 100 | Utility-based AI; skips entities lacking `Biochemistry`/`Vision`/`Genome` |
 | `plant_system` | `Plant` | 75 | Grows energy (cap 180) and drops fruit when above `fructify_threshold` |
-| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Metabolism, regeneration, starvation → death |
+| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`) |
 | `command_system` | `CommandQueue` | 50 | Picks next ready command and executes the running one |
 | `logging_system` | `CommandQueue`, `State`, `Biochemistry` | 0 | Writes per-entity state and utilities to `logs/last_tick.txt` |
 
@@ -294,30 +308,71 @@ If the chosen action is already in `State.states`, the entity is left alone
    (`MoveToTargetCommand`, emergency 1) and mate (`MateCommand`, emergency 2).
 4. **idle** – `WanderCommand(radius=8)`.
 
-## Biochemistry (gene-driven)
+## Biochemistry & Senescence (gene-driven)
 
 ```python
-metabolism = genome.get_phenotype(GeneNames.METABOLISM)
-speed      = genome.get_phenotype(GeneNames.SPEED)
+metabolism = genome.get_phenotype(GeneNames.METABOLISM, (0.01, 2), log=True)
+speed      = genome.get_phenotype(GeneNames.SPEED, (1, 3))
+fertility  = genome.get_phenotype(GeneNames.FERTILITY, (0, 1))
+wear_resistance = genome.get_phenotype(GeneNames.WEAR_RESISTANCE, (180, 700), log=True)
+senescence_shape = genome.get_phenotype(GeneNames.SENESCENCE_SHAPE, (1, 3))
+regeneration_threshold = genome.get_phenotype(GeneNames.REGENERATION_THRESHOLD, (0, 1))
+regeneration_increase  = genome.get_phenotype(GeneNames.REGENERATION_INCREASE, (1, 5))
 
-# Energy/hunger drain when not sleeping
-bio.energy = max(bio.energy - (1 + metabolism) * (2 + speed) ** 2, 0)
-bio.hunger = max(bio.hunger - (1 + metabolism) * (2 + speed) ** 2 / 4, 0)
+# --- Ageing: accumulated wear -------------------------------------------------
+bio.age += 1
+wear = min(1, bio.age / wear_resistance)          # wear_resistance plays the role of L
+bio.vitality = max(0, 1 - wear ** senescence_shape)   # damage = (age / L) ** a
+bio.max_health = bio.vitality * 100
+breedable.fertility = fertility * min(1, bio.vitality * 2) * (1 - senescence_shape / 3)
 
-# Breedable cooldown ticks down each step
+# --- Metabolism (when not sleeping) ------------------------------------------
+bio.energy = max(bio.energy - metabolism * speed ** 2 * (2 - bio.vitality), 0)
+bio.hunger = max(bio.hunger - metabolism * speed ** 2 * (wear_resistance / 710), 0)
+
+# --- Reproduction cooldown ----------------------------------------------------
 breedable.cooldown = max(breedable.cooldown - 1, 0)
 
-# Starvation / exhaustion reduce health; death leaves a corpse
+# --- Starvation / exhaustion reduce health ------------------------------------
 if bio.energy == 0: bio.health = max(bio.health - 1, 0)
 if bio.hunger == 0: bio.health = max(bio.health - 1, 0)
-if bio.health == 0: push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=50))
 
-# Regeneration
-if bio.energy > 60 and bio.hunger > 60 and bio.health < 80:
-    bio.health += 5 * (1 + metabolism)
-    bio.energy -= 5
-    bio.hunger -= 5
+# --- Regeneration -------------------------------------------------------------
+if bio.energy > 60 and bio.hunger > 60 and bio.health < regeneration_threshold * bio.max_health:
+    bio.health += regeneration_increase * metabolism * bio.vitality
+    bio.energy -= regeneration_increase ** 2 * metabolism / 2
+    bio.hunger -= regeneration_increase ** 2 * metabolism / 2
+
+# --- Health is capped by vitality; death is emergent --------------------------
+bio.health = min(bio.health, bio.max_health)
+if bio.health <= 0:
+    push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=50))
 ```
+
+### The ageing model
+
+Ageing is a **Weibull-style accumulated-wear** model, split so that each gene
+controls a separate property:
+
+- `wear_resistance` is the characteristic lifespan `L` (scale). Wear is the
+  normalised age `age / L`, capped at `1`.
+- `senescence_shape` is the Weibull exponent `a` (shape). Damage is
+  `wear ** a`, so `a = 1` is linear (no senescence), `a > 1` accelerates late
+  in life, and vitality is `1 - damage`.
+- `vitality` drives `max_health`, regeneration strength and fertility, so
+  ageing is felt through several channels instead of a death flag.
+- `age` is **chronological age in ticks** and is never re-scaled by genes, so
+  it can be used directly for lifespan and survivorship statistics.
+
+Death is not scheduled: as `age` approaches `L`, vitality → 0, `max_health` → 0,
+`health` is clamped to 0 and the normal `DeathCommand` path fires (leaving a
+corpse). With the default grid you can therefore plot survivorship `l(t)`
+against chronological age `t`.
+
+> Trade-off note: `(1 - senescence_shape / 3)` gives a maximum-shape creature
+> zero fertility, linking longevity to reproduction. Without such a cost,
+> selection drives `wear_resistance` and `senescence_shape` to their bounds and
+> ageing disappears.
 
 ## Commands Reference
 
@@ -326,7 +381,7 @@ if bio.energy > 60 and bio.hunger > 60 and bio.health < 80:
 | `MoveToTargetCommand` | 15 (to food), 1 (to partner), inherits `WanderCommand`'s otherwise | `eat`/`mating`/`idle` | A\* pathfinding to `(x, y)` |
 | `EatCommand` | 16 | `eat` | Consume adjacent food |
 | `SleepCommand` | 10 | `sleep` | Rest `ticks_to_sleep` ticks, emit `SleepEvent` each tick |
-| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination) |
+| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); sets both cooldowns to `100 + genome.get_phenotype(wear_resistance, (0.001, 300), log=True)` |
 | `WanderCommand` | 0 (default) | `eat`/`idle` | Random move within `radius`; pushes a `MoveToTargetCommand` |
 | `DeathCommand` | 100 | – | Remove entity, optionally leave a corpse, append to `logs/log.txt` |
 
@@ -385,7 +440,11 @@ def make_creature(x, y, world, color=(80, 120, 200)):
         Gene(GeneNames.MATING_DRIVE, 1, 1),
         Gene(GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2),
         Gene(GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2),
-        Gene(GeneNames.FERTILITY, -0.5, -0.5),
+        Gene(GeneNames.FERTILITY, 0.5, 0.5),
+        Gene(GeneNames.REGENERATION_INCREASE, 0.1, 0.1),
+        Gene(GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, dominant=False),
+        Gene(GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, dominant=False),
+        Gene(GeneNames.WEAR_RESISTANCE, 0, 0),
     ]
     e = (Entity()
          .add_component(Movable())
@@ -436,6 +495,17 @@ with a random `fructify_threshold` in `[70, 90]`.
 ```bash
 python -m pytest tests/ -v
 ```
+
+The suite is deterministic and runs each test in a throwaway working directory
+that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
+
+- `tests/test_genome.py` – phenotype, dominance, crossover/mutation, and both
+  the linear and **logarithmic** `get_phenotype` scalings.
+- `tests/test_aging.py` – the senescence model: age accumulation, wear/vitality
+  curves, `max_health` scaling, emergent end-of-life death, and reproductive
+  senescence.
+- `tests/test_systems.py` – all systems, with biochemistry expectations derived
+  from the same gene scaling via `tests/helpers.py`.
 
 ## Current Limitations & Roadmap
 

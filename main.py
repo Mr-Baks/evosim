@@ -22,7 +22,11 @@ def make_creature(x, y, world: World, color=(80, 120, 200)):
     genes.append(Gene(GeneNames.MATING_DRIVE, 1, 1))
     genes.append(Gene(GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2))
     genes.append(Gene(GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2))
-    genes.append(Gene(GeneNames.FERTILITY, -0.5, -0.5))
+    genes.append(Gene(GeneNames.FERTILITY, 0.5, 0.5))
+    genes.append(Gene(GeneNames.REGENERATION_INCREASE, 0.1, 0.1))
+    genes.append(Gene(GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, dominant=False))
+    genes.append(Gene(GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, dominant=False))
+    genes.append(Gene(GeneNames.WEAR_RESISTANCE, 0, 0))
 
     e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable()).add_component(Render(symbol='C', color=color)).add_component(Genome(genes))
     world.place_entity(e, x, y)

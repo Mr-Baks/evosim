@@ -3,21 +3,34 @@
 Since the genetics integration, creature logic (biochemistry, decision
 utilities) derives its behaviour from a Genome component. Tests create
 deterministic genomes with known gene values here.
+
+``default_genes`` returns a genome whose *derived* traits are documented
+below, so tests can assert against a stable baseline. Ageing genes are
+chosen so that senescence is negligible at a single tick of age, keeping
+the older metabolism/reproduction tests meaningful.
 """
 from genome import Gene, GeneNames, Genome
 
 
 def default_genes(**overrides) -> Genome:
-    """A deterministic gene set with neutral phenotype values.
+    """A deterministic gene set with predictable derived traits.
 
     Deriving values (same for both alleles, dominant) means the phenotype
-    equals the given gene value exactly:
-        metabolism=0, speed=0     -> energy decay  (1+0)*(2+0)**2 = 4 / tick,
-                                     hunger decay  4/4 = 1 / tick
-        drive value v             -> drive factor (v + 1) / 2
+    equals the given gene value exactly. Defaults map to:
+
+        metabolism      = 0.0   -> 0.01 * (2 / 0.01) ** 0.5      (~0.1414 energy/weight)
+        speed           = 0.0   -> (1, 3)  -> 2
+        senescence_shape= -1.0  -> (1, 3)  -> 1   (linear wear, a = 1)
+        wear_resistance = 1.0   -> (180, 700) log -> 700 (slow ageing)
+        regeneration_threshold = -1.0 -> (0, 1) -> 0 (regeneration disabled)
+        reproduction cooldown (MateCommand scaling (0.001, 300)) = 100 + 300 = 400
+
     Override individual genes via keyword arguments, e.g.:
 
         default_genes(hunger_drive=1.0, sleep_drive=0.5)
+
+    or pass derived gene names with their ``GeneNames`` constants to stay
+    independent of the string literals.
     """
     values = {
         GeneNames.SPEED: 0.0,
@@ -32,9 +45,52 @@ def default_genes(**overrides) -> Genome:
         GeneNames.MATING_HUNGER_THRESHOLD: -1.0,
         GeneNames.MATING_ENERGY_THRESHOLD: -1.0,
         GeneNames.FERTILITY: 0.5,
+        GeneNames.SENESCENCE_SHAPE: -1.0,
+        GeneNames.WEAR_RESISTANCE: 1.0,
+        GeneNames.REGENERATION_THRESHOLD: -1.0,
+        GeneNames.REGENERATION_INCREASE: -1.0,
     }
     values.update(overrides)
     return Genome([Gene(name, value, value) for name, value in values.items()])
+
+
+# Scaling the biochemistry system applies to each gene. Kept in one place so
+# tests can derive expected trait values without duplicating magic numbers.
+BIOCHEM_SCALING = {
+    'metabolism': (GeneNames.METABOLISM, (0.01, 2), True),
+    'speed': (GeneNames.SPEED, (1, 3), False),
+    'fertility': (GeneNames.FERTILITY, (0, 1), False),
+    'regeneration_threshold': (GeneNames.REGENERATION_THRESHOLD, (0, 1), False),
+    'regeneration_increase': (GeneNames.REGENERATION_INCREASE, (1, 5), False),
+    'senescence_shape': (GeneNames.SENESCENCE_SHAPE, (1, 3), False),
+    'wear_resistance': (GeneNames.WEAR_RESISTANCE, (180, 700), True),
+}
+
+
+def biochem_traits(genome) -> dict:
+    """Derive the scaled trait values ``biochemistry_system`` reads."""
+    return {
+        key: genome.get_phenotype(name, scaling, log=log)
+        for key, (name, scaling, log) in BIOCHEM_SCALING.items()
+    }
+
+
+def wear_and_vitality(traits: dict, age: float) -> tuple[float, float]:
+    """Mirror of the ageing model: wear = age / L (capped), vitality = 1 - wear^a."""
+    wear = min(1.0, age / traits['wear_resistance'])
+    vitality = max(0.0, 1.0 - wear ** traits['senescence_shape'])
+    return wear, vitality
+
+
+def living_energy_cost(traits: dict, age: float) -> float:
+    """Expected energy drained per tick while awake."""
+    _, vitality = wear_and_vitality(traits, age)
+    return traits['metabolism'] * traits['speed'] ** 2 * (2 - vitality)
+
+
+def living_hunger_cost(traits: dict) -> float:
+    """Expected hunger drained per tick."""
+    return traits['metabolism'] * traits['speed'] ** 2 * (traits['wear_resistance'] / 710)
 
 
 def make_decision_random_deterministic(monkeypatch, value: float = 1.0) -> None:

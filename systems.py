@@ -32,19 +32,31 @@ def vision_system(entities: set[Entity], world: World):
 def biochemistry_system(entities: set[Entity], world: World):
     for e in entities:
         bio: Biochemistry = e.get_component(Biochemistry)
-        breedable = e.get_component(Breedable)
+        breedable: Breedable = e.get_component(Breedable)
         queue = e.get_component(CommandQueue)
         genome: Genome = e.get_component(Genome)
         
-        metabolism = genome.get_phenotype(GeneNames.METABOLISM)
-        speed = genome.get_phenotype(GeneNames.SPEED)
+        metabolism = genome.get_phenotype(GeneNames.METABOLISM, (0.01, 2), log=True)
+        speed = genome.get_phenotype(GeneNames.SPEED, (1, 3))
+        fertility = genome.get_phenotype(GeneNames.FERTILITY, (0, 1))
+        regeneration_threshold = genome.get_phenotype(GeneNames.REGENERATION_THRESHOLD, (0, 1))
+        regeneration_increase = genome.get_phenotype(GeneNames.REGENERATION_INCREASE, (1, 5))
+        senescence_shape = genome.get_phenotype(GeneNames.SENESCENCE_SHAPE, (1, 3))
+        wear_resistance = genome.get_phenotype(GeneNames.WEAR_RESISTANCE, (180, 700), log=True)
+
+        bio.age += 1 
+        wear = min(1, bio.age / wear_resistance)
+        bio.vitality = max(0, 1 - wear ** (senescence_shape))
+        bio.max_health = bio.vitality * 100
+        if breedable:
+            breedable.fertility = fertility * min(1, bio.vitality * 2) * (1 - senescence_shape / 3)
         
         if not queue.running or not isinstance(queue.running, SleepCommand):
-            bio.energy = max(bio.energy - (1 + metabolism) * (2 + speed) ** 2, 0)
+            bio.energy = max(bio.energy - metabolism * speed ** 2 * (2 - bio.vitality), 0)
             if bio.energy == 0:
                 bio.health = max(bio.health - 1, 0)
         
-        bio.hunger = max(bio.hunger - (1 + metabolism) * (2 + speed) ** 2 / 4, 0)
+        bio.hunger = max(bio.hunger - metabolism * speed ** 2 * (wear_resistance / 710), 0)
 
         if breedable:
             breedable.cooldown = max(breedable.cooldown - 1, 0)
@@ -52,13 +64,14 @@ def biochemistry_system(entities: set[Entity], world: World):
         if bio.hunger == 0:
             bio.health = max(bio.health - 1, 0)
 
-        if bio.health == 0:
-            push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=50))
+        if bio.energy > 60 and bio.hunger > 60 and bio.health < regeneration_threshold * bio.max_health:
+            bio.health += regeneration_increase * metabolism * bio.vitality
+            bio.energy -= regeneration_increase ** 2 * metabolism / 2
+            bio.hunger -= regeneration_increase ** 2 * metabolism / 2
 
-        if bio.energy > 60 and bio.hunger > 60 and bio.health < 80:
-            bio.health += 5 * (1 + metabolism)
-            bio.energy -= 5
-            bio.hunger -= 5
+        bio.health = min(bio.health, bio.max_health)
+        if bio.health <= 0:
+            push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=50))
 
 def plant_system(entities: set[Entity], world: World):
     for e in entities:
@@ -157,7 +170,7 @@ def logging_system(entities: set[Entity], world: World):
         log += f'Entity {i} at {e.x}, {e.y}:\n'
         log += f'   Running command: {queue.running.target_state if queue.running else None} | queue\'s len: {len(queue.queue)}\n'
         log += f'   Current state: {state.current} | states: {state.states}\n'
-        log += f'   Energy: {bio.energy} | hunger: {bio.hunger} | helth: {bio.health}\n'
+        log += f'   Energy: {bio.energy:.2f} | hunger: {bio.hunger:.2f} | helth: {bio.health:.2f} | age: {bio.age:.2f} | vitality: {bio.vitality:.2f}\n'
         log += f'   Utilities: {uts}\n'
 
     with open('logs/last_tick.txt', 'w+') as l:

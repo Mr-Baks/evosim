@@ -1,5 +1,6 @@
 """Unit tests for Gene/Genome: phenotype, dominance, crossover, mutation,
 phenotype scaling and recombination."""
+import math
 import random
 
 import pytest
@@ -120,10 +121,29 @@ class TestGetPhenotype:
         g = Genome([Gene('x', raw, raw)])
         assert g.get_phenotype('x', (lo, hi)) == pytest.approx(expected)
 
-    def test_scaling_ignored_when_sentinel_present(self):
-        g = Genome([Gene('x', 0.3, 0.3)])
-        assert g.get_phenotype('x', (None, 1)) == pytest.approx(0.3)
-        assert g.get_phenotype('x', (0, None)) == pytest.approx(0.3)
+    @pytest.mark.parametrize('raw, lo, hi, expected', [
+        (-1.0, 180, 700, 180.0),
+        (1.0, 180, 700, 700.0),
+        (0.0, 180, 700, math.sqrt(180 * 700)),
+        (-1.0, 0.01, 2, 0.01),
+        (1.0, 0.01, 2, 2.0),
+        (0.0, 0.01, 2, math.sqrt(0.01 * 2)),
+        (-1.0, 1, 5, 1.0),
+        (1.0, 1, 5, 5.0),
+        (0.0, 1, 5, math.sqrt(5)),
+    ])
+    def test_log_scaling_maps_geometrically(self, raw, lo, hi, expected):
+        g = Genome([Gene('x', raw, raw)])
+        assert g.get_phenotype('x', (lo, hi), log=True) == pytest.approx(expected)
+
+    def test_log_scaling_endpoints(self):
+        g = Genome([Gene('x', -1.0, -1.0)])
+        assert g.get_phenotype('x', (250, 550), log=True) == pytest.approx(250.0)
+        g = Genome([Gene('x', 1.0, 1.0)])
+        assert g.get_phenotype('x', (250, 550), log=True) == pytest.approx(550.0)
+
+    def test_log_scaling_missing_gene_uses_default(self):
+        assert Genome().get_phenotype('x', (180, 700), default=33.0, log=True) == 33.0
 
     def test_scaling_with_missing_gene_uses_default(self):
         assert Genome().get_phenotype('x', (0, 1), default=0.25) == 0.25

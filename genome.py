@@ -40,6 +40,10 @@ class GeneNames:
     MATING_HUNGER_THRESHOLD = 'mating_hunger_threshold'
     MATING_ENERGY_THRESHOLD = 'mating_energy_threshold'
     FERTILITY = 'fertility'
+    SENESCENCE_SHAPE = 'senescence_shape'
+    WEAR_RESISTANCE = 'wear_resistance'
+    REGENERATION_THRESHOLD = 'regeneration_threshold'
+    REGENERATION_INCREASE = 'regeneration_increase'
 
 class Genome(Component):
     def __init__(self, genes: Optional[list[Gene]] = None):
@@ -65,7 +69,7 @@ class Genome(Component):
             
             smin, smax = scaling
             if log:
-                phenotype = smin * (smax / smax) ** ((raw_phenotype + 1) / 2)
+                phenotype = smin * (smax / smin) ** ((raw_phenotype + 1) / 2)
             else:
                 phenotype = ((raw_phenotype + 1) * (smax - smin) / 2) + smin
 

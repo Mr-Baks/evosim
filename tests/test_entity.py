@@ -39,12 +39,18 @@ class TestComponent:
         assert b.energy == 100
         assert b.hunger == 100
         assert b.health == 100
+        assert b.max_health == 100
+        assert b.vitality == 1
+        assert b.age == 0
 
     def test_biochemistry_custom(self):
-        b = Biochemistry(energy=50, hunger=30, health=80)
+        b = Biochemistry(energy=50, hunger=30, health=80, max_health=90, vitality=0.4, age=250)
         assert b.energy == 50
         assert b.hunger == 30
         assert b.health == 80
+        assert b.max_health == 90
+        assert b.vitality == 0.4
+        assert b.age == 250
 
     def test_eatable(self):
         e = Eatable(nutrition=25)
@@ -52,12 +58,12 @@ class TestComponent:
 
     def test_breedable_defaults(self):
         b = Breedable()
-        assert b.fertility == 100
+        assert b.fertility == 1
         assert b.cooldown == 30
 
     def test_breedable_custom(self):
-        b = Breedable(fertility=80, cooldown=10)
-        assert b.fertility == 80
+        b = Breedable(fertility=0.8, cooldown=10)
+        assert b.fertility == 0.8
         assert b.cooldown == 10
 
     def test_vision_defaults(self):

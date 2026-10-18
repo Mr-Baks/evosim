@@ -24,9 +24,12 @@ class Movable(Component):
 
 @dataclass
 class Biochemistry(Component):
-    energy: int = 100
-    hunger: int = 100
-    health: int = 100
+    energy: float = 100
+    hunger: float = 100
+    health: float = 100
+    max_health: float = 100
+    vitality: float = 1
+    age: float = 0
 
 @dataclass
 class Eatable(Component):
@@ -34,7 +37,7 @@ class Eatable(Component):
 
 @dataclass
 class Breedable(Component):
-    fertility: int = 100
+    fertility: float = 1
     cooldown: int = 30
 
 @dataclass 

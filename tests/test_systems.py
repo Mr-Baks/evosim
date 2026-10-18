@@ -1,9 +1,18 @@
+import pytest
+
 from systems import *
 from commands import *
 from entity import *
 from world import World
 from event_bus import EventBus
-from tests.helpers import default_genes, make_decision_random_deterministic
+from genome import Genome, GeneNames
+from tests.helpers import (
+    default_genes,
+    make_decision_random_deterministic,
+    biochem_traits,
+    living_energy_cost,
+    living_hunger_cost,
+)
 
 
 class TestCommandSystem:
@@ -80,18 +89,20 @@ class TestVisionSystem:
 
 
 class TestBiochemistrySystem:
-    # With a neutral genome (metabolism=0, speed=0) the decay is
-    # (1+0)*(2+0)**2 = 4 energy and 4/4 = 1 hunger per tick.
+    # Drains are gene-derived: metabolism * speed**2 scaled, then weighted by
+    # (2 - vitality) for energy and (wear_resistance / 710) for hunger.
+    # Expected values are computed from the same scaling in tests.helpers.
 
     def test_biochemistry_system_energy_decay(self):
         e = Entity().add_component(Biochemistry(energy=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
         w = World(10, 10)
         w.place_entity(e, 5, 5)
 
+        traits = biochem_traits(e.get_component(Genome))
         biochemistry_system({e}, w)
 
         bio = e.get_component(Biochemistry)
-        assert bio.energy == 96
+        assert bio.energy == pytest.approx(100 - living_energy_cost(traits, age=1))
 
     def test_biochemistry_system_energy_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(energy=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
@@ -108,10 +119,11 @@ class TestBiochemistrySystem:
         w = World(10, 10)
         w.place_entity(e, 5, 5)
 
+        traits = biochem_traits(e.get_component(Genome))
         biochemistry_system({e}, w)
 
         bio = e.get_component(Biochemistry)
-        assert bio.hunger == 99
+        assert bio.hunger == pytest.approx(100 - living_hunger_cost(traits))
 
     def test_biochemistry_system_hunger_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(hunger=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
@@ -296,18 +308,23 @@ class TestDecisionSystem:
 
         assert len(w.index.get_with(Movable)) == 4
 
+        # Cooldown is derived from the parent's wear_resistance gene.
+        expected_cooldown = 100 + e1.get_component(Genome).get_phenotype(
+            GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True
+        )
+
         # Interpretation cycle until the mating command completes
         for _ in range(15):
             vision_system({e1}, w)
             decision_system({e1}, w)
             command_system({e1}, w)
             w.event_bus.dispatch()
-            if e2.get_component(Breedable).cooldown == 200:
+            if e2.get_component(Breedable).cooldown > 0:
                 break
 
         # Mating happened: both parents are cooled down and a child was born
-        assert e1.get_component(Breedable).cooldown == 200
-        assert e2.get_component(Breedable).cooldown == 200
+        assert e1.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
+        assert e2.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
         assert len(w.index.get_with(Movable)) == 5
 
     def test_decision_system_wanders_when_idle(self):
@@ -350,8 +367,13 @@ class TestSystemsIntegration:
         biochemistry_system({e}, w)
         w.event_bus.dispatch()
 
-        # Energy decays by (1+0)*(2+0)**2 = 4 when not sleeping
-        assert e.get_component(Biochemistry).energy == 96
+        bio = e.get_component(Biochemistry)
+        # Energy decays from metabolism/ageing and, if the creature moved
+        # this tick, from MoveEvent; it never rises on an awake tick.
+        assert 0 <= bio.energy < 100
+        assert bio.age == 1
+        assert bio.max_health == pytest.approx(bio.vitality * 100)
+        assert bio.health <= bio.max_health + 1e-9
         assert len(e.get_component(CommandQueue).queue) >= 0
 
     def test_eat_then_energy_increase(self, monkeypatch):
