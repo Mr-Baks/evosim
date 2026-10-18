@@ -57,13 +57,18 @@ class Genome(Component):
             return self.genes.pop(name)
         return None
 
-    def get_phenotype(self, name: str, scaling: tuple[None | float, None | float] = (None, None), default: float = None) -> Optional[float]:
+    def get_phenotype(self, name: str, scaling: tuple[float, float] | None = None, default: float = None, log: bool = False) -> float | None:
         if name in self.genes:
             raw_phenotype = self.genes[name].phenotype
-            smin, smax = scaling
-            if smin is None or smax is None:
+            if scaling is None: 
                 return raw_phenotype
-            phenotype = ((raw_phenotype + 1) * (smax - smin) / 2) + smin
+            
+            smin, smax = scaling
+            if log:
+                phenotype = smin * (smax / smax) ** ((raw_phenotype + 1) / 2)
+            else:
+                phenotype = ((raw_phenotype + 1) * (smax - smin) / 2) + smin
+
             return phenotype
         return default
 
