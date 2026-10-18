@@ -264,7 +264,10 @@ class TestDecisionSystem:
         assert bio.hunger > 30
 
     def test_decision_system_hungry_no_food_wanders(self):
-        e = Entity().add_component(Biochemistry(hunger=30, energy=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=1)).add_component(Movable()).add_component(default_genes())
+        # No food in sight and nothing else to do: 'idle' must win so the
+        # creature wanders instead of freezing. Sleep is switched off and
+        # exploration drive maximised so the choice is unambiguous.
+        e = Entity().add_component(Biochemistry(hunger=30, energy=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=1)).add_component(Movable()).add_component(default_genes(exploration_drive=1.0, sleep_drive=-1.0))
         w = World(10, 10)
         self._subscribe_handlers(w)
         w.place_entity(e, 5, 5)
@@ -273,7 +276,7 @@ class TestDecisionSystem:
         decision_system({e}, w)
         command_system({e}, w)
 
-        # The decide action is 'idle': WanderCommand executes a first move step
+        # The decided action is 'idle': WanderCommand executes a first move step
         assert (e.x, e.y) != (5, 5)
 
     def test_decision_system_low_energy_sleeps(self):
@@ -328,7 +331,9 @@ class TestDecisionSystem:
         assert len(w.index.get_with(Movable)) == 5
 
     def test_decision_system_wanders_when_idle(self):
-        e = Entity().add_component(Biochemistry(hunger=100, energy=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+        # Idle exploration is the fallback: eat/mate are unattractive (no food,
+        # no partner) and sleep is switched off.
+        e = Entity().add_component(Biochemistry(hunger=100, energy=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(exploration_drive=1.0, sleep_drive=-1.0))
         w = World(10, 10)
         self._subscribe_handlers(w)
         w.place_entity(e, 5, 5)
@@ -337,8 +342,30 @@ class TestDecisionSystem:
         decision_system({e}, w)
         command_system({e}, w)
 
-        # The decide action is 'idle': WanderCommand executes a first move step
+        # The decided action is 'idle': WanderCommand executes a first move step
         assert (e.x, e.y) != (5, 5)
+
+    def test_wander_utility_grows_with_crowding(self):
+        # Birth-rate control: a crowded creature should be keener to wander
+        # (and thus disperse) than an isolated one.
+        lonely = Entity().add_component(Biochemistry(hunger=50, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+        crowded = Entity().add_component(Biochemistry(hunger=50, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+        w = World(10, 10)
+        w.place_entity(lonely, 9, 9)
+        w.place_entity(crowded, 1, 1)
+        for (x, y) in [(1, 2), (2, 1), (2, 2), (1, 0), (0, 1)]:
+            w.place_entity(Entity().add_component(Movable()), x, y)
+
+        vision_system({lonely, crowded}, w)
+
+        assert wander_utility(crowded, w) > wander_utility(lonely, w)
+
+    def test_wander_utility_drops_when_starving(self):
+        # A starving creature should be less eager to wander aimlessly.
+        fed = Entity().add_component(Biochemistry(hunger=0, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+        starving = Entity().add_component(Biochemistry(hunger=190, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+
+        assert wander_utility(fed, None) > wander_utility(starving, None)
 
     def test_decision_system_skips_without_bio_or_vision(self):
         e = Entity().add_component(CommandQueue()).add_component(State()).add_component(Movable())
@@ -354,7 +381,7 @@ class TestDecisionSystem:
 
 class TestSystemsIntegration:
     def test_full_tick_cycle(self):
-        e = Entity().add_component(Biochemistry(energy=100, hunger=100, health=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable()).add_component(Breedable(cooldown=0)).add_component(default_genes())
+        e = Entity().add_component(Biochemistry(energy=100, hunger=100, health=100)).add_component(CommandQueue()).add_component(State()).add_component(Vision(radius=5)).add_component(Movable()).add_component(Breedable(cooldown=0)).add_component(default_genes(sleep_drive=-1.0))
         w = World(20, 20)
         w.place_entity(e, 10, 10)
 
@@ -368,8 +395,9 @@ class TestSystemsIntegration:
         w.event_bus.dispatch()
 
         bio = e.get_component(Biochemistry)
-        # Energy decays from metabolism/ageing and, if the creature moved
-        # this tick, from MoveEvent; it never rises on an awake tick.
+        # Sleep is switched off (sleep_drive=-1) so the creature stays awake:
+        # energy decays from metabolism/ageing and, if it moved this tick, from
+        # MoveEvent; it never rises on an awake tick.
         assert 0 <= bio.energy < 100
         assert bio.age == 1
         assert bio.max_health == pytest.approx(bio.vitality * 100)

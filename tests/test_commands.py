@@ -392,7 +392,6 @@ class TestMateCommand:
         w.place_entity(e2, 6, 5)
 
         free_cells_before = w.get_free_cells_near(e1)
-        expected_child_pos = free_cells_before[0]
 
         cmd = MateCommand(partner=e2)
         queue = e1.get_component(CommandQueue)
@@ -408,9 +407,13 @@ class TestMateCommand:
         assert e1.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
         assert e2.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
 
-        # Child should be placed at the first free cell near e1 before execution
-        child = w.get_entity(*expected_child_pos)
-        assert child is not None
+        # The child is placed on a *random* free cell near e1
+        # (World.get_free_cell_near -> random.choice), so exactly one of the
+        # cells that were free before execution must now hold the child.
+        occupied = [w.get_entity(x, y) for (x, y) in free_cells_before]
+        children = [c for c in occupied if c is not None]
+        assert len(children) == 1
+        child = children[0]
         assert child.has_component(Biochemistry)
         assert child.has_component(Movable)
         # Child inherits a recombined genome

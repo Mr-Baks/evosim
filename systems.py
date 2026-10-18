@@ -140,10 +140,10 @@ def wander_utility(entity: Entity, world: World) -> float:
     bio: Biochemistry = entity.get_component(Biochemistry)
     genome: Genome = entity.get_component(Genome)
     
-    biochemistry_factor = 1 - ((bio.hunger + bio.energy) / 400)
+    biochemistry_factor = min(1, max(0.2, 2 * (1 - (bio.hunger / 200))))
     
     creatures_count = sum(1 for ve in vision.visibles if ve.has_component(Movable))
-    creatures_factor = 1 - max(creatures_count / 5, 0.01)
+    creatures_factor = min(1, max(creatures_count / 5, 0.01))
 
     plant_count = sum(1 for ve in vision.visibles if ve.has_component(Plant))
     plant_factor = 1 - min(plant_count / 5, 1)

@@ -293,7 +293,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `eat` | `(1 - hunger/200) · clamp(food_in_vision / 3, 0.01, 1) · hunger_drive` |
 | `sleep` | `(1 - energy/200) · sleep_drive` |
 | `mating` | `((hunger + energy)/400) · clamp(partners_in_vision / 3, 0, 1) · mating_drive · fertility` (`-1` unless energy ≥ `mating_energy_threshold`, hunger ≥ `mating_hunger_threshold` and `cooldown == 0`; `fertility` is treated as `0` below `0.2`) |
-| `idle` | `(1 - (hunger+energy)/400) · (1 - clamp(plants_in_vision / 5, 0, 1)) · exploration_drive · (1 - max(creatures_in_vision / 5, 0.01))` |
+| `idle` | `clamp(2·(1 - hunger/200), 0.2, 1) · (1 - clamp(plants_in_vision / 5, 0, 1)) · exploration_drive · clamp(creatures_in_vision / 5, 0.01, 1)` |
 
 If the chosen action is already in `State.states`, the entity is left alone
 (this prevents re-issuing a command that is already running). Otherwise:
@@ -306,7 +306,9 @@ If the chosen action is already in `State.states`, the entity is left alone
    `SleepCommand(energy_increase=50, emergency=10)`.
 3. **mating** – pick the nearest visible partner, move next to it
    (`MoveToTargetCommand`, emergency 1) and mate (`MateCommand`, emergency 2).
-4. **idle** – `WanderCommand(radius=8)`.
+4. **idle** – `WanderCommand(radius=8)`; crowding raises the idle utility, so
+   dense clusters disperse and repeated local mating is damped. The hunger term
+   keeps aimless wandering low on an empty stomach.
 
 ## Biochemistry & Senescence (gene-driven)
 
