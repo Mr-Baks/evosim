@@ -1,0 +1,182 @@
+"""Typed, dependency-light configuration for EvoSim.
+
+Three layers, grouped by how often they change:
+
+* ``RunConfig``      -- a single run: seed, length, output. Swept across seeds.
+* ``ScenarioConfig`` -- initial conditions: world size, counts, founder genome.
+* ``BalanceConfig``  -- world "physics". Reserved skeleton: the systems still
+  read their own literals, so changing a value here does NOT yet affect a run.
+  Wire it in incrementally, only when an experiment asks to vary a parameter.
+
+Precedence: dataclass defaults -> TOML file -> CLI flags.
+"""
+import argparse
+import json
+import tomllib
+from dataclasses import asdict, dataclass, field, fields, replace
+from pathlib import Path
+from typing import Any, Mapping
+
+from genome import GeneNames
+
+
+@dataclass(frozen=True)
+class WorldConfig:
+    width: int = 100
+    height: int = 40
+
+    @property
+    def size(self) -> tuple[int, int]:
+        return (self.width, self.height)
+
+
+# One founder gene: (name, allele1, allele2, dominant). Alleles and dominance
+# are kept explicit so the founder stays an exact reproduction of the genome
+# currently hard-coded in ``make_creature``.
+FounderGene = tuple[str, float, float, bool]
+
+DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
+    (GeneNames.SPEED, -0.6, -0.6, False),
+    (GeneNames.HUNGER_DRIVE, 0.5, 0.5, True),
+    (GeneNames.SLEEP_DRIVE, 0.5, 0.5, True),
+    (GeneNames.EXPLORATION_DRIVE, 0.5, 0.5, True),
+    (GeneNames.METABOLISM, 0.1, 0.2, False),
+    (GeneNames.MATING_DRIVE, 1.0, 1.0, True),
+    (GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2, True),
+    (GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2, True),
+    (GeneNames.FERTILITY, 0.5, 0.5, True),
+    (GeneNames.REGENERATION_INCREASE, 0.1, 0.1, True),
+    (GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, False),
+    (GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, False),
+    (GeneNames.WEAR_RESISTANCE, 0.0, 0.0, True),
+)
+
+
+@dataclass(frozen=True)
+class ScenarioConfig:
+    name: str = "baseline"
+    world: WorldConfig = field(default_factory=WorldConfig)
+    initial_plants: int = 120
+    initial_creatures: int = 40
+    creature_color: tuple[int, int, int] = (80, 120, 200)
+    founder_genes: tuple[FounderGene, ...] = DEFAULT_FOUNDER_GENES
+
+
+@dataclass(frozen=True)
+class BalanceConfig:
+    """Reserved "physics" parameters.
+
+    Values mirror the current literals so that wiring them in later is a no-op
+    refactor. Nothing here is consumed by the systems yet.
+    """
+    # plants
+    plant_energy_increase: int = 2
+    plant_fructify_min: int = 70
+    plant_fructify_max: int = 90
+    plant_fruit_nutrition: int = 25
+    # corpses
+    corpse_nutrition: int = 50
+    # mating
+    mating_energy_cost: float = 70.0
+    mating_hunger_cost: float = 60.0
+    mating_cooldown_base: int = 100
+    mating_cooldown_scaling: tuple[float, float] = (0.001, 300.0)
+    # sleep
+    sleep_energy_increase: int = 50
+    # utility saturation constants
+    hunger_scale: float = 200.0
+    energy_scale: float = 200.0
+    food_saturation: int = 3
+    partner_saturation: int = 3
+    creature_saturation: int = 5
+    plant_saturation: int = 5
+    eat_reconsider_chance: float = 0.3
+    wander_radius: int = 8
+    wander_fallback_radius: int = 6
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    seed: int = 1
+    ticks: int = 1200
+    record_every: int = 10
+    output_dir: str = "results"
+    headless: bool = False
+    tickspeed: int = 10
+    fps: int = 10
+
+
+@dataclass(frozen=True)
+class SimConfig:
+    run: RunConfig = field(default_factory=RunConfig)
+    scenario: ScenarioConfig = field(default_factory=ScenarioConfig)
+    balance: BalanceConfig = field(default_factory=BalanceConfig)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "SimConfig":
+        """Build a config from a nested dict (e.g. parsed TOML/JSON)."""
+        data = dict(data)
+        run = RunConfig(**_section(RunConfig, data.pop("run", {})))
+
+        scenario_data = dict(data.pop("scenario", {}))
+        world = WorldConfig(**_section(WorldConfig, scenario_data.pop("world", {})))
+        if "founder_genes" in scenario_data:
+            scenario_data["founder_genes"] = tuple(tuple(g) for g in scenario_data["founder_genes"])
+        if "creature_color" in scenario_data:
+            scenario_data["creature_color"] = tuple(scenario_data["creature_color"])
+        scenario = ScenarioConfig(world=world, **_section(ScenarioConfig, scenario_data))
+
+        balance = BalanceConfig(**_section(BalanceConfig, data.pop("balance", {})))
+
+        if data:
+            raise ValueError(f"Unknown config sections: {sorted(data)}")
+        return cls(run=run, scenario=scenario, balance=balance)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _section(cls: type, data: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate that ``data`` only contains keys declared by ``cls``."""
+    data = dict(data)
+    unknown = set(data) - {f.name for f in fields(cls)}
+    if unknown:
+        raise ValueError(f"Unknown {cls.__name__} keys: {sorted(unknown)}")
+    return data
+
+
+def _cli_overrides(argv: list[str] | None) -> dict[str, Any]:
+    parser = argparse.ArgumentParser(description="EvoSim config overrides")
+    parser.add_argument("--config", type=str, default=None, help="Path to a TOML config file")
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--ticks", type=int, default=None)
+    parser.add_argument("--record-every", dest="record_every", type=int, default=None)
+    parser.add_argument("--output-dir", dest="output_dir", type=str, default=None)
+    parser.add_argument("--tickspeed", type=int, default=None)
+    parser.add_argument("--fps", type=int, default=None)
+    parser.add_argument("--headless", action=argparse.BooleanOptionalAction, default=None)
+    return vars(parser.parse_args(argv))
+
+
+def load_config(path: str | Path | None = None, argv: list[str] | None = None) -> SimConfig:
+    """Load a ``SimConfig`` from defaults, an optional TOML file and CLI flags."""
+    overrides = _cli_overrides(argv)
+    if path is None:
+        path = overrides.pop("config", None)
+
+    data: Mapping[str, Any] = {}
+    if path:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    cfg = SimConfig.from_dict(data)
+
+    run_overrides = {k: v for k, v in overrides.items() if v is not None}
+    return replace(cfg, run=replace(cfg.run, **run_overrides))
+
+
+def dump_config(cfg: SimConfig, path: str | Path) -> None:
+    """Persist the effective config next to a run's results for reproducibility."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(cfg.to_dict(), f, indent=2, sort_keys=True)

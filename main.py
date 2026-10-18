@@ -1,56 +1,45 @@
-from entity import * 
-from world import World
-from simulation import Simulation
+"""Interactive entry point: build the default world from ``SimConfig`` and run it.
+
+Running this module directly starts the TUI simulation. Importing it has no
+side effects, so experiment runners and tests can reuse ``build_simulation``.
+"""
 import random
+
 from commands import *
-from event_bus import Event, EventBus
-from systems import *
+from config import SimConfig, load_config
+from entity import *
+from event_bus import EatEvent, Event, EventBus, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
 from genome import Gene, GeneNames, Genome
+from simulation import Simulation
+from systems import *
+from world import World
 
 
-def make_creature(x, y, world: World, color=(80, 120, 200)):
-    genes = []
+def make_creature(x, y, world: World, cfg: SimConfig, color=None):
+    color = color or cfg.scenario.creature_color
 
-    genes.append(Gene(GeneNames.SPEED, -0.6, -0.6, dominant=False))
-    genes.append(Gene(GeneNames.HUNGER_DRIVE, 0.5, 0.5))
-    genes.append(Gene(GeneNames.SLEEP_DRIVE, 0.5, 0.5))
-    genes.append(Gene(GeneNames.EXPLORATION_DRIVE, 0.5, 0.5))
+    genes = [Gene(name, a1, a2, dominant=dom) for name, a1, a2, dom in cfg.scenario.founder_genes]
     genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, -1, dominant=False))
     genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1, dominant=False))
     genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1, dominant=False))
-    genes.append(Gene(GeneNames.METABOLISM, 0.1, 0.2, dominant=False))
-    genes.append(Gene(GeneNames.MATING_DRIVE, 1, 1))
-    genes.append(Gene(GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2))
-    genes.append(Gene(GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2))
-    genes.append(Gene(GeneNames.FERTILITY, 0.5, 0.5))
-    genes.append(Gene(GeneNames.REGENERATION_INCREASE, 0.1, 0.1))
-    genes.append(Gene(GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, dominant=False))
-    genes.append(Gene(GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, dominant=False))
-    genes.append(Gene(GeneNames.WEAR_RESISTANCE, 0, 0))
 
-    e = Entity().add_component(Movable()).add_component(Biochemistry()).add_component(Vision(8)).add_component(CommandQueue()).add_component(State()).add_component(Breedable()).add_component(Render(symbol='C', color=color)).add_component(Genome(genes))
+    e = (Entity().add_component(Movable()).add_component(Biochemistry())
+         .add_component(Vision(8)).add_component(CommandQueue()).add_component(State())
+         .add_component(Breedable()).add_component(Render(symbol='C', color=color))
+         .add_component(Genome(genes)))
     world.place_entity(e, x, y)
+
 
 def make_food(x, y, world: World, nutrition=20):
     e = Entity().add_component(Eatable(nutrition))
-    world.place_entity(e, x, y)   
-
-def make_plant(x, y, world: World):
-    e = Entity().add_component(Plant(fructify_threshold=random.randint(70, 90))).add_component(Render(symbol='P', color=(0, 200, 10)))
     world.place_entity(e, x, y)
 
-s = Simulation(10, 10, (100, 40), background_sym='.')
 
-s.world.event_bus.subscribe(EatEvent, on_eat)
-s.world.event_bus.subscribe(SleepEvent, on_sleep)
-s.world.event_bus.subscribe(MoveEvent, on_move)
+def make_plant(x, y, world: World, cfg: SimConfig):
+    threshold = random.randint(cfg.balance.plant_fructify_min, cfg.balance.plant_fructify_max)
+    e = Entity().add_component(Plant(fructify_threshold=threshold)).add_component(Render(symbol='P', color=(0, 200, 10)))
+    world.place_entity(e, x, y)
 
-s.register_system(frozenset([CommandQueue, State, Biochemistry]), logging_system, priority=0)
-s.register_system(frozenset([CommandQueue]), command_system, priority=50)
-s.register_system(frozenset([Vision]), vision_system, priority=200)
-s.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
-s.register_system(frozenset([Plant]), plant_system, priority=75)
-s.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
 
 def tick_stats(sim: Simulation):
     food_amount = len(sim.world.index.get_with(Eatable))
@@ -61,18 +50,60 @@ def tick_stats(sim: Simulation):
 
     print(f'creatures: {creatures_amount} | food: {food_amount} | avg speed: {avg_speed}')
 
-s.add_on_tick(tick_stats)
 
-for _ in range(120):
-    x = random.randint(0, s.world.width - 1)
-    y = random.randint(0, s.world.height - 1)
-    if not s.world.get_entity(x, y):
-        make_plant(x, y, s.world)
+def _scatter(sim: Simulation, count: int, make):
+    world = sim.world
+    for _ in range(count):
+        x = random.randint(0, world.width - 1)
+        y = random.randint(0, world.height - 1)
+        if not world.get_entity(x, y):
+            make(x, y)
 
-for _ in range(40):
-    x = random.randint(0, s.world.width - 1)
-    y = random.randint(0, s.world.height - 1)
-    if not s.world.get_entity(x, y):
-        make_creature(x, y, s.world)
 
-s.run(target_tick=1200)
+def build_simulation(cfg: SimConfig) -> Simulation:
+    """Assemble the default world described by ``cfg`` (no stepping)."""
+    sim = Simulation(cfg.run.tickspeed, cfg.run.fps, cfg.scenario.world.size, background_sym='.')
+
+    sim.world.event_bus.subscribe(EatEvent, on_eat)
+    sim.world.event_bus.subscribe(SleepEvent, on_sleep)
+    sim.world.event_bus.subscribe(MoveEvent, on_move)
+
+    if not cfg.run.headless:
+        sim.register_system(frozenset([CommandQueue, State, Biochemistry]), logging_system, priority=0)
+        sim.add_on_tick(tick_stats)
+        
+    sim.register_system(frozenset([CommandQueue]), command_system, priority=50)
+    sim.register_system(frozenset([Vision]), vision_system, priority=200)
+    sim.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
+    sim.register_system(frozenset([Plant]), plant_system, priority=75)
+    sim.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
+
+    _scatter(sim, cfg.scenario.initial_plants, lambda x, y: make_plant(x, y, sim.world, cfg))
+    _scatter(sim, cfg.scenario.initial_creatures, lambda x, y: make_creature(x, y, sim.world, cfg))
+
+    return sim
+
+
+def run_headless(sim: Simulation, ticks: int) -> None:
+    """Step the simulation without wall-clock pacing or rendering."""
+    for _ in range(ticks):
+        sim.handle_systems()
+        sim.world.event_bus.dispatch()
+        sim.tick += 1
+
+
+def main(cfg: SimConfig | None = None) -> None:
+    if cfg is None:
+        cfg = load_config()
+
+    random.seed(cfg.run.seed)
+    sim = build_simulation(cfg)
+
+    if cfg.run.headless:
+        run_headless(sim, cfg.run.ticks)
+    else:
+        sim.run(target_tick=cfg.run.ticks)
+
+
+if __name__ == '__main__':
+    main()

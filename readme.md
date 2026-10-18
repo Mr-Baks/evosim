@@ -87,7 +87,8 @@ Colors indicate creature lineage (derived from the genome). The demo runs for
 
 ```
 evosim/
-├── main.py           # Entry point: world setup, system registration, spawning, tick stats
+├── main.py           # Entry point: build_simulation(cfg) / main(cfg); import-safe
+├── config.py         # SimConfig (Run/Scenario/Balance), TOML + CLI loading
 ├── entity.py         # Entity, Component base classes and all component types (except Genome)
 ├── genome.py         # Gene, GeneNames, Genome (heredity, recombination, mutation)
 ├── world.py          # World grid, QueryIndex (ECS query engine), spatial queries
@@ -398,70 +399,64 @@ against chronological age `t`.
 > `SleepCommand` passes `energy_increase=50`, so sleeping restores more energy
 > than the event default.
 
-## Configuration (main.py)
+## Configuration (`config.py` + `main.py`)
+
+All run parameters live in a frozen `SimConfig` made of three layers, grouped
+by how often they change:
+
+| Layer | Purpose | Example fields |
+|-------|---------|----------------|
+| `RunConfig` | a single run | `seed`, `ticks`, `record_every`, `output_dir`, `headless`, `tickspeed`, `fps` |
+| `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes` |
+| `BalanceConfig` | reserved "physics" (declared, **not wired into systems yet**) | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
+
+Precedence: **dataclass defaults → TOML file → CLI flags**.
 
 ```python
-s = Simulation(10, 10, (100, 40), background_sym='.')
+from config import load_config, SimConfig
+cfg = load_config("scenario.toml")   # or load_config() for defaults
+cfg.run.seed                 # 1
+cfg.scenario.world.size      # (100, 40)
+cfg.scenario.founder_genes   # ((name, allele1, allele2, dominant), ...)
+```
 
-# Event handlers
-s.world.event_bus.subscribe(EatEvent, on_eat)
-s.world.event_bus.subscribe(SleepEvent, on_sleep)
-s.world.event_bus.subscribe(MoveEvent, on_move)
+```bash
+python main.py --seed 7 --ticks 2000 --headless
+python main.py --config scenario.toml --output-dir results/run1
+```
+
+`main.build_simulation(cfg)` assembles the world from `cfg` without stepping.
+`main.main(cfg)` seeds the RNG from `cfg.run.seed`, then either runs the
+interactive loop (`sim.run`) or `run_headless` (no rendering, no wall-clock
+pacing). Importing `main` has no side effects. `dump_config(cfg, path)` writes
+the effective config next to results for reproducibility.
+
+### System registration in `build_simulation`
+
+```python
+sim = Simulation(cfg.run.tickspeed, cfg.run.fps, cfg.scenario.world.size)
+
+# logging/printing run only in interactive mode, skipped when headless
+if not cfg.run.headless:
+    sim.register_system(frozenset([CommandQueue, State, Biochemistry]), logging_system, priority=0)
+    sim.add_on_tick(tick_stats)
 
 # System registration order matters (higher priority runs first)
-s.register_system(frozenset([CommandQueue, State, Biochemistry]), logging_system, priority=0)
-s.register_system(frozenset([CommandQueue]), command_system, priority=50)
-s.register_system(frozenset([Vision]), vision_system, priority=200)
-s.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
-s.register_system(frozenset([Plant]), plant_system, priority=75)
-s.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
-
-# Per-tick callback
-s.add_on_tick(tick_stats)
-
-# Seed the world, then run for a fixed number of ticks
-for _ in range(120): make_plant(random.randint(0, s.world.width - 1), ..., s.world)
-for _ in range(40):  make_creature(random.randint(0, s.world.width - 1), ..., s.world)
-
-s.run(target_tick=1200)
+sim.register_system(frozenset([CommandQueue]), command_system, priority=50)
+sim.register_system(frozenset([Vision]), vision_system, priority=200)
+sim.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
+sim.register_system(frozenset([Plant]), plant_system, priority=75)
+sim.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
 ```
 
-### Creature Factory (main.py)
+### Founder genome
 
-```python
-def make_creature(x, y, world, color=(80, 120, 200)):
-    genes = [
-        Gene(GeneNames.SPEED, -0.6, -0.6, dominant=False),
-        Gene(GeneNames.HUNGER_DRIVE, 0.5, 0.5),
-        Gene(GeneNames.SLEEP_DRIVE, 0.5, 0.5),
-        Gene(GeneNames.EXPLORATION_DRIVE, 0.5, 0.5),
-        Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, -1, dominant=False),
-        Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1, dominant=False),
-        Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1, dominant=False),
-        Gene(GeneNames.METABOLISM, 0.1, 0.2, dominant=False),
-        Gene(GeneNames.MATING_DRIVE, 1, 1),
-        Gene(GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2),
-        Gene(GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2),
-        Gene(GeneNames.FERTILITY, 0.5, 0.5),
-        Gene(GeneNames.REGENERATION_INCREASE, 0.1, 0.1),
-        Gene(GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, dominant=False),
-        Gene(GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, dominant=False),
-        Gene(GeneNames.WEAR_RESISTANCE, 0, 0),
-    ]
-    e = (Entity()
-         .add_component(Movable())
-         .add_component(Biochemistry())
-         .add_component(Vision(8))
-         .add_component(CommandQueue())
-         .add_component(State())
-         .add_component(Breedable())
-         .add_component(Render(symbol='C', color=color))
-         .add_component(Genome(genes)))
-    world.place_entity(e, x, y)
-```
-
-`make_food()` spawns a standalone `Eatable`, `make_plant()` spawns a `Plant`
-with a random `fructify_threshold` in `[70, 90]`.
+The founder is `scenario.founder_genes`, a tuple of
+`(name, allele1, allele2, dominant)` — an exact, configurable reproduction of
+the genome that used to be hard-coded in `make_creature`. Color genes are
+derived from `scenario.creature_color`. `make_food()` spawns a standalone
+`Eatable`; `make_plant()` spawns a `Plant` with a random `fructify_threshold`
+in `[plant_fructify_min, plant_fructify_max]`.
 
 ## Extending the Simulation
 
