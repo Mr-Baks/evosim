@@ -69,7 +69,14 @@ class TestComponent:
     def test_vision_defaults(self):
         v = Vision()
         assert v.radius == 4
-        assert v.visibles == set()
+        assert v.visibles == []
+
+    def test_vision_visibles_not_shared(self):
+        # default_factory must give each Vision its own list, not a shared one.
+        a = Vision()
+        b = Vision()
+        a.visibles.append('x')
+        assert b.visibles == []
 
     def test_vision_custom(self):
         v = Vision(radius=5)

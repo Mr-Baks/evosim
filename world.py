@@ -6,9 +6,11 @@ import random
 
 class QueryIndex:
     def __init__(self):
-        self.entities = set()
-        self.component_index: dict[type[Component], set[Entity]] = {}
-        self.systems_cache: dict[frozenset[type[Component]], set[Entity]] = {}
+        self.entities = []
+        self.component_index: dict[type[Component], list[Entity]] = {}
+        self.systems_cache: dict[frozenset[type[Component]], list[Entity]] = {}
+        self.component_index_dirty = True
+        self.systems_cache_dirty = True
 
         self.locked = False
         self.pending_addition: list[Entity] = []
@@ -20,16 +22,19 @@ class QueryIndex:
             return
         
         index = self.component_index
-        self.entities.add(entity)
+        self.entities.append(entity)
         entity.locked_direct_operation = True
 
         for c in entity.components:
-            if c not in index: index[c] = set()
-            index[c].add(entity)
+            if c not in index: index[c] = []
+            index[c].append(entity)
 
         for key, cache_set in self.systems_cache.items():
             if key.issubset(set(entity.components)):
-                cache_set.add(entity)
+                cache_set.append(entity)
+
+        self.component_index_dirty = True
+        self.systems_cache_dirty = True
 
     def remove_entity(self, entity: Entity) -> None:
         if self.locked:
@@ -38,14 +43,27 @@ class QueryIndex:
             else:
                 self.pending_removal.append(entity)
             return
-        
-        self.entities.discard(entity)
+
+        if entity in self.entities:
+            self.entities.remove(entity)
         entity.locked_direct_operation = False
         for c in entity.components:
-            self.component_index[c].discard(entity)
+            self.component_index[c].remove(entity)
         
         for key in self.systems_cache:
-            self.systems_cache[key].discard(entity)
+            if entity in self.systems_cache[key]:
+                self.systems_cache[key].remove(entity)
+
+    def sort_cache(self):
+        if self.component_index_dirty:
+            for lst in self.component_index.values():
+                lst.sort(key=lambda e: e.eid)
+            self.component_index_dirty = False
+
+        if self.systems_cache_dirty:
+            for lst in self.systems_cache.values():
+                lst.sort(key=lambda e: e.eid)
+            self.systems_cache_dirty = False
 
     def flush_pending(self):
         if self.locked: return
@@ -60,25 +78,23 @@ class QueryIndex:
         self.pending_removal.clear()
         
     def register_system(self, components: frozenset[type[Component]]) -> None:
-        self.systems_cache[components] = self.get_with(*components)
+        self.systems_cache[components] = list(self.get_with(*components))
+        self.systems_cache_dirty = True
 
-    def get_with(self, *component_types: type[Component]) -> set[Entity]:
+    def get_with(self, *component_types: type[Component]) -> list[Entity]:
         if not component_types:
-            return self.entities
+            return list(self.entities)
 
-        sets = []
+        lists = []
         for t in component_types:
             if t not in self.component_index:
-                return set()
-            sets.append(self.component_index[t])
+                return []
+            lists.append(self.component_index[t])
 
-        sets.sort(key=len)
+        lists.sort(key=len)
 
-        result = sets[0].copy()
-        for s in sets[1:]:
-            result &= s
-
-        return result
+        others = [set(lst) for lst in lists[1:]]
+        return [e for e in lists[0] if all(e in other for other in others)]
         
 class World:
     def __init__(self, width: int = 60, height: int = 15):
@@ -96,6 +112,8 @@ class World:
             for dy in range(-1, 2):
                 self._offset_cache[1].append((dx, dy))
         self._offset_cache[1].remove((0, 0))
+
+        self._eid_counter = 0
     
     def _check_cell(self, x: int, y: int) -> bool:
         if x < 0 or x >= self.width or y < 0 or y >= self.height: return False
@@ -125,6 +143,8 @@ class World:
         self.cells[y][x] = entity
         entity.x, entity.y = x, y
         self.index.add_entity(entity)
+        entity.eid = self._eid_counter
+        self._eid_counter += 1
 
         return True
 
@@ -147,15 +167,15 @@ class World:
         self._offset_cache[radius] = offsets
         return offsets
 
-    def get_neighbours(self, entity: Entity, radius=1) -> set[Entity]:
-        neighbours = set()
+    def get_neighbours(self, entity: Entity, radius=1) -> list[Entity]:
+        neighbours = []
         x, y = entity.x, entity.y
 
         for dx, dy in self._get_offsets(radius):
             entity = self.get_entity(x + dx, y + dy)
             if entity:
-                neighbours.add(entity)
-        return neighbours
+                neighbours.append(entity)
+        return sorted(neighbours, key=lambda e: e.eid)
 
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         free_cells = []
@@ -191,12 +211,14 @@ class World:
             return
 
         entity.add_component(component, direct=False)
-        self.index.component_index.setdefault(ctype, set()).add(entity)
+        self.index.component_index.setdefault(ctype, []).append(entity)
+        self.index.component_index_dirty = True
 
         if entity in self.index.entities:
             for key, cache in self.index.systems_cache.items():
                 if key.issubset(entity.components):
-                    cache.add(entity)
+                    cache.append(entity)
+                    self.index.systems_cache_dirty = True
 
     def remove_component(self, entity, component_type):
         if self.index.locked:
@@ -207,11 +229,14 @@ class World:
             return
 
         removed = entity.remove_component(component_type, direct=False)
-        self.index.component_index.get(component_type, set()).discard(entity)
+        component_list = self.index.component_index.get(component_type)
+        if component_list is not None and entity in component_list:
+            component_list.remove(entity)
 
         for key, cache in self.index.systems_cache.items():
             if not key.issubset(entity.components):
-                cache.discard(entity)
+                if entity in cache:
+                    cache.remove(entity)
 
         return removed
 
@@ -221,7 +246,6 @@ class World:
 
         for entity, comps in self.pending_component_removal.items():
             for comp in comps:
-                # `comp` is already a component type here.
                 self.remove_component(entity, comp)
 
         for entity, comps in self.pending_component_addition.items():

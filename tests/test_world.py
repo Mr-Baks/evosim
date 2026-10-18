@@ -6,7 +6,7 @@ from world import World, QueryIndex
 class TestQueryIndex:
     def test_init(self):
         index = QueryIndex()
-        assert index.entities == set()
+        assert index.entities == []
         assert index.component_index == {}
         assert index.systems_cache == {}
         assert index.locked is False
@@ -99,7 +99,7 @@ class TestQueryIndex:
         index.register_system(components)
         
         assert components in index.systems_cache
-        assert index.systems_cache[components] == {e1}
+        assert index.systems_cache[components] == [e1]
 
     def test_get_with_single_component(self):
         index = QueryIndex()
@@ -111,7 +111,7 @@ class TestQueryIndex:
         index.add_entity(e3)
         
         result = index.get_with(Biochemistry)
-        assert result == {e1, e2}
+        assert result == [e1, e2]
 
     def test_get_with_multiple_components(self):
         index = QueryIndex()
@@ -125,7 +125,7 @@ class TestQueryIndex:
         index.add_entity(e4)
         
         result = index.get_with(Biochemistry, Movable)
-        assert result == {e1, e4}
+        assert result == [e1, e4]
 
     def test_get_with_no_components(self):
         index = QueryIndex()
@@ -135,7 +135,7 @@ class TestQueryIndex:
         index.add_entity(e2)
         
         result = index.get_with()
-        assert result == {e1, e2}
+        assert result == [e1, e2]
 
     def test_get_with_missing_component(self):
         index = QueryIndex()
@@ -143,7 +143,7 @@ class TestQueryIndex:
         index.add_entity(e1)
         
         result = index.get_with(Plant)
-        assert result == set()
+        assert result == []
 
 
 class TestWorld:

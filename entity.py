@@ -43,7 +43,7 @@ class Breedable(Component):
 @dataclass 
 class Vision(Component):
     radius: int = 4
-    visibles: set[Entity] = field(default_factory=set)
+    visibles: list[Entity] = field(default_factory=list)
 
 @dataclass 
 class Plant(Component):
@@ -56,6 +56,7 @@ class Entity:
     def __init__(self, x: int = 0, y: int = 0):
         self.x = x
         self.y = y
+        self.eid = None
         self.components: set[Component] = set()
         self.components_dict: dict[type[Component], Component] = {}
         self.locked_direct_operation = False

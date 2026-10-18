@@ -23,6 +23,7 @@ class Simulation:
         self.world.index.register_system(required_components)
 
     def handle_systems(self) -> None:
+        self.world.index.sort_cache()
         self.world.index.locked = True
         for _, req_comps, system in self.systems:
             system(self.world.index.systems_cache[req_comps], self.world)
