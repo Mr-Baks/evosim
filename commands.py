@@ -348,11 +348,26 @@ class MateCommand(Command):
         return True
 
     def execute(self, entity, world):
+        genome1: Genome = entity.get_component(Genome)
+        genome2: Genome = self.partner.get_component(Genome)
+        bio1: Biochemistry = entity.get_component(Biochemistry)
+        bio2: Biochemistry = self.partner.get_component(Biochemistry)
+        
         child = create_child(entity, self.partner, world)
         free_cell = world.get_free_cell_near(entity)
+
         if free_cell and child:
             x, y = free_cell
             world.place_entity(child, x, y)
-        entity.get_component(Breedable).cooldown = 100 + entity.get_component(Genome).get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
-        self.partner.get_component(Breedable).cooldown = 100 + self.partner.get_component(Genome).get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
-        self.complete(entity)
+
+            entity.get_component(Breedable).cooldown = 100 + genome1.get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
+            self.partner.get_component(Breedable).cooldown = 100 + genome2.get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
+
+            bio1.energy -= 70
+            bio1.hunger -= 60
+            bio2.energy -= 70
+            bio2.hunger -= 60
+
+            self.complete(entity)
+        else:
+            self.complete(entity, status=CommandStatus.FAILED)
