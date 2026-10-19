@@ -329,12 +329,13 @@ class TestMoveToTargetCommand:
         queue = e.get_component(CommandQueue)
         queue.running = cmd
         
-        # Occupied goal is awaited for several retries, then the command gives up
+        # The destination is occupied: the entity does not idle - it slips to a
+        # free neighbour - and after repeated failures the command gives up.
         cmd.execute(e, w)
         assert cmd.status != CommandStatus.FAILED
-        assert e.x == 5
+        assert (e.x, e.y) != (5, 5)
         
-        for _ in range(8):
+        for _ in range(10):
             cmd.execute(e, w)
         
         assert cmd.status == CommandStatus.FAILED
@@ -690,7 +691,7 @@ class TestMoveToTargetPathfinding:
         command.execute(entity, world)
         assert entity.x == 1
 
-    def test_replans_when_next_cell_becomes_blocked(self):
+    def test_sidesteps_when_next_cell_becomes_blocked(self):
         world = World(6, 6)
         entity = _creature(world, 0, 0)
         command = MoveToTargetCommand(x=3, y=0)
@@ -704,7 +705,44 @@ class TestMoveToTargetPathfinding:
 
         assert command.path == []
         assert command.path_retry_count == 1
-        assert entity.x == 1
+        # It slips aside instead of idling on top of the obstacle.
+        assert (entity.x, entity.y) != (1, 0)
+        assert (entity.x, entity.y) != (2, 0)
+
+    def test_octile_distance_matches_8way_walk_cost(self):
+        # 3 right + 4 up = 3 diagonal steps + 1 straight step
+        assert octile(0, 0, 3, 4) == pytest.approx(3 * 1.414 + 1.0)
+
+    def test_route_prefers_straight_line_when_clear(self):
+        world = World(6, 6)
+        entity = _creature(world, 0, 0)
+        command = MoveToTargetCommand(x=0, y=4)
+
+        assert command._route(world, entity) == [(0, 1), (0, 2), (0, 3), (0, 4)]
+
+    def test_route_falls_back_to_a_star_when_line_is_blocked(self):
+        world = World(7, 7)
+        entity = _creature(world, 0, 3)
+        world.place_entity(Entity().add_component(Biochemistry()), 1, 3)
+        command = MoveToTargetCommand(x=6, y=3)
+
+        route = command._route(world, entity)
+
+        assert route and route[-1] == (6, 3)
+        assert (1, 3) not in route
+
+    def test_sidesteps_when_goal_is_occupied(self):
+        world = World(8, 8)
+        entity = _creature(world, 3, 3)
+        world.place_entity(Entity().add_component(Biochemistry()), 4, 3)
+        command = MoveToTargetCommand(x=4, y=3)
+        entity.get_component(CommandQueue).running = command
+
+        command.execute(entity, world)
+
+        # No idling: the creature moves to a free neighbour instead.
+        assert (entity.x, entity.y) != (3, 3)
+        assert command.path == []
 
 
 class TestWanderCommand:

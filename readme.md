@@ -233,19 +233,30 @@ systems run for the tick.
 
 ### A\* Pathfinding (`MoveToTargetCommand`)
 
-- Computes the full path on the first tick, or after being blocked.
+- Tries a cheap **line-of-sight** shortcut first: if the greedy 8-way line to the
+  goal is unobstructed, the entity walks it directly and A\* is skipped.
+- Otherwise runs **A\*** with the **octile** heuristic (the exact cost of an
+  unobstructed 8-way walk): diagonal cost = `1.414`, cardinal = `1.0`.
+- Each search is capped at **400 node expansions** (bounds the worst case in
+  open or crowded maps).
 - Follows the path one step per unit of `Movable.speed`, accumulating fractional
   speed in `movement_accumulator`.
-- On a blocked step, replans; after **more than 7** failed steps the command
-  fails.
-- Diagonal cost = `1.414`, cardinal = `1.0`.
+- On a blocked step the entity does **not** idle: it sidesteps into the free
+  neighbour that keeps it closest to the goal, never stepping back onto the cell
+  it just left. After **more than 7** blocked steps the command fails.
 - Ignores the moving entity itself; treats every other entity as a wall (the
-  goal cell may be occupied).
+  goal cell may be occupied - that is what triggers a sidestep).
+
+Determinism: neighbours are always scanned in a fixed order and priority-queue
+ties are broken by insertion order, so equal states yield equal paths.
 
 ```python
+def _route(self, world, entity):
+    # straight line if clear, otherwise A*
+    # returns a list of (x, y) positions excluding the start
+
 def _find_path(self, world, start, ignore_entity=None):
-    # Standard A* with Manhattan heuristic
-    # Returns a list of (x, y) positions excluding the start
+    # A* with octile heuristic, node cap, deterministic tie-break
 ```
 
 ## Components Reference

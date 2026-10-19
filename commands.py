@@ -182,82 +182,157 @@ class SleepCommand(Command):
         if self.ticks_to_sleep <= 0:
             self.complete(entity)
 
+_DIAGONAL = 1.414
+_CARDINAL = 1.0
+_MAX_EXPANSIONS = 400
+_MAX_PATH_RETRIES = 7
+_DIRECTIONS = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1),  (1, 0),  (1, 1),)
+
+def octile(x: int, y: int, gx: int, gy: int) -> float:
+    """Octile distance - the exact cost of an unobstructed 8-way walk."""
+    dx = abs(x - gx)
+    dy = abs(y - gy)
+    return (dx + dy) + (_DIAGONAL - 2.0) * min(dx, dy)
+
+def _straight_steps(start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]]:
+    """Cells of the greedy 8-way line: start exclusive, goal inclusive."""
+    x, y = start
+    gx, gy = goal
+    steps = []
+    while (x, y) != goal:
+        x += (gx > x) - (gx < x)
+        y += (gy > y) - (gy < y)
+        steps.append((x, y))
+    return steps
+
+def _line_of_sight(world: World, start: tuple[int, int], goal: tuple[int, int], ignore_entity: Entity = None) -> bool:
+    """True if the greedy 8-way line from start to goal is free of entities."""
+    x, y = start
+    gx, gy = goal
+    while (x, y) != goal:
+        x += (gx > x) - (gx < x)
+        y += (gy > y) - (gy < y)
+        if (x, y) == goal:
+            break
+        occupant = world.get_entity(x, y)
+        if occupant is not None and occupant is not ignore_entity:
+            return False
+    return True
+
 @dataclass
 class MoveToTargetCommand(Command):
     x: int = 0
     y: int = 0
     path: list[tuple[int, int]] = field(default_factory=list)
     path_retry_count: int = 0
-    
+    previous: Optional[tuple[int, int]] = None
+
+    def _route(self, world: World, entity: Entity) -> list[tuple[int, int]]:
+        """Cheapest route to the goal: straight line when clear, else A*."""
+        start = (entity.x, entity.y)
+        if start == (self.x, self.y):
+            return []
+        if _line_of_sight(world, start, (self.x, self.y), ignore_entity=entity):
+            return _straight_steps(start, (self.x, self.y))
+        return self._find_path(world, start, ignore_entity=entity)
+
     def _find_path(self, world: World, start: tuple[int, int], ignore_entity: Entity = None) -> list[tuple[int, int]]:
         sx, sy = start
         gx, gy = self.x, self.y
         goal = (self.x, self.y)
-        
+
         if start == goal:
             return []
-        
-        def heuristic(x, y):
-            return abs(x - gx) + abs(y - gy)
-        
-        open_set = [(heuristic(sx, sy), 0, sx, sy)]
+
+        counter = 0
+        open_set = [(octile(sx, sy, gx, gy), counter, sx, sy)]
         came_from = {}
-        g_score = {start: 0}
+        g_score = {start: 0.0}
         closed_set = set()
-        
+        expansions = 0
+
         while open_set:
-            _, g, x, y = heapq.heappop(open_set)
+            _, _, x, y = heapq.heappop(open_set)
             current = (x, y)
-            
+
             if current == goal:
                 path = []
                 while current in came_from:
                     path.append(current)
                     current = came_from[current]
                 return path[::-1]
-            
+
             if current in closed_set:
                 continue
             closed_set.add(current)
-            
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    if dx == 0 and dy == 0:
-                        continue
-                    nx, ny = x + dx, y + dy
-                    
-                    if not (0 <= nx < world.width and 0 <= ny < world.height):
-                        continue
-                    
-                    neighbor = (nx, ny)
-                    if neighbor in closed_set:
-                        continue
-                    
-                    entity_at = world.get_entity(nx, ny)
-                    if entity_at and entity_at is not ignore_entity and neighbor != goal:
-                        continue
-                    
-                    move_cost = 1.414 if dx != 0 and dy != 0 else 1.0
-                    tentative_g = g + move_cost
-                    
-                    if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                        came_from[neighbor] = current
-                        g_score[neighbor] = tentative_g
-                        f = tentative_g + heuristic(nx, ny)
-                        heapq.heappush(open_set, (f, tentative_g, nx, ny))
-        
+
+            expansions += 1
+            if expansions > _MAX_EXPANSIONS:
+                return []
+
+            g = g_score[current]
+            for dx, dy in _DIRECTIONS:
+                nx, ny = x + dx, y + dy
+
+                if not (0 <= nx < world.width and 0 <= ny < world.height):
+                    continue
+
+                neighbor = (nx, ny)
+                if neighbor in closed_set:
+                    continue
+
+                entity_at = world.get_entity(nx, ny)
+                if entity_at and entity_at is not ignore_entity and neighbor != goal:
+                    continue
+
+                move_cost = _DIAGONAL if dx != 0 and dy != 0 else _CARDINAL
+                tentative_g = g + move_cost
+
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    counter += 1
+                    heapq.heappush(open_set, (tentative_g + octile(nx, ny, gx, gy), counter, nx, ny))
+
         return []
-    
+
+    def _step_around(self, entity: Entity, world: World) -> bool:
+        """Slip into the free neighbour that keeps the entity closing on its goal."""
+        gx, gy = self.x, self.y
+        current_dist = octile(entity.x, entity.y, gx, gy)
+
+        best = None
+        best_dist = None
+        for dx, dy in _DIRECTIONS:
+            nx, ny = entity.x + dx, entity.y + dy
+            if (nx, ny) == self.previous:
+                continue
+            if not (0 <= nx < world.width and 0 <= ny < world.height):
+                continue
+            if world.get_entity(nx, ny) is not None:
+                continue
+
+            dist = octile(nx, ny, gx, gy)
+            if dist > current_dist:
+                continue
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best = (nx, ny)
+
+        if best is None:
+            return False
+
+        old = (entity.x, entity.y)
+        if not world.make_move(entity, *best):
+            return False
+        self.previous = old
+        world.event_bus.emit(MoveEvent(source=entity))
+        return True
+
     def execute(self, entity: Entity, world: World):
         if self.x == entity.x and self.y == entity.y:
             self.complete(entity)
             return
-
-        if not self.path:
-            self.path = self._find_path(world, (entity.x, entity.y), ignore_entity=entity)
-            if not self.path:
-                self.complete(entity, CommandStatus.FAILED)
-                return
 
         movable: Movable = entity.get_component(Movable)
         movable.movement_accumulator += movable.speed
@@ -265,24 +340,35 @@ class MoveToTargetCommand(Command):
         movable.movement_accumulator -= steps
 
         for _ in range(steps):
-            if not self.path: break
-            
+            if self.x == entity.x and self.y == entity.y:
+                self.complete(entity)
+                return
+
+            if not self.path:
+                self.path = self._route(world, entity)
+                if not self.path:
+                    self.complete(entity, CommandStatus.FAILED)
+                    return
+
             next_pos = self.path[0]
+            old = (entity.x, entity.y)
 
             if world.make_move(entity, *next_pos):
+                self.previous = old
                 world.event_bus.emit(MoveEvent(source=entity))
                 self.path.pop(0)
                 self.path_retry_count = 0
+                continue
 
-                if self.x == entity.x and self.y == entity.y:
-                    self.complete(entity)
-            else:
-                self.path_retry_count += 1
-                if self.path_retry_count > 7:
-                    self.complete(entity, status=CommandStatus.FAILED)
-                    return
-                self.path = []
-                return
+            self.path = []
+            self._step_around(entity, world)
+            self.path_retry_count += 1
+            if self.path_retry_count > _MAX_PATH_RETRIES:
+                self.complete(entity, CommandStatus.FAILED)
+            return
+
+        if self.x == entity.x and self.y == entity.y:
+            self.complete(entity)
 
 @dataclass
 class WanderCommand(Command):
