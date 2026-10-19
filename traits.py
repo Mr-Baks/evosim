@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from genome import GeneNames, Genome
 
+MAX_HEALTH = 100
+HUNGER_COST_SCALE = 710
 
 @dataclass(frozen=True)
 class Speed:
@@ -35,6 +37,38 @@ class Traits:
     mating_hunger_threshold: float
     color: Color
 
+    def wear(self, age: float) -> float:
+        """Fraction of the lifespan used at age, capped at 1."""
+        return min(1.0, age / self.wear_resistance.aging)
+
+    def vitality(self, age: float) -> float:
+        """Health multiplier from ageing: 1 at birth, 0 at the end of life."""
+        return max(0.0, 1.0 - self.wear(age) ** self.senescence_shape)
+
+    def max_health(self, vitality: float) -> float:
+        """Health cap at a given vitality."""
+        return vitality * MAX_HEALTH
+
+    def energy_drain(self, vitality: float) -> float:
+        """Energy spent per awake tick; frailer bodies burn more."""
+        return self.metabolism * self.speed.metabolic ** 2 * (2 - vitality)
+
+    def hunger_drain(self) -> float:
+        """Hunger spent per tick; longer-lived bodies burn more."""
+        return self.metabolism * self.speed.metabolic ** 2 * (self.wear_resistance.aging / HUNGER_COST_SCALE)
+
+    def effective_fertility(self, vitality: float) -> float:
+        """Fertility after the vitality gate and the senescence-shape penalty."""
+        return self.fertility * min(1.0, vitality * 2) * (1 - self.senescence_shape / 3)
+
+    def regeneration_gain(self, vitality: float) -> float:
+        """Health regained per regeneration activation."""
+        return self.regeneration_increase * self.metabolism * vitality
+
+    def regeneration_cost(self) -> float:
+        """Energy (and equally hunger) spent per regeneration activation."""
+        return self.regeneration_increase ** 2 * self.metabolism / 2
+
 def derive(genome: Genome) -> Traits:
     """Compute all phenotype effects from a genome."""
     gp = genome.get_phenotype
@@ -66,7 +100,7 @@ def derive(genome: Genome) -> Traits:
     )
 
 def traits_for(genome: Genome) -> Traits:
-    """Return the cached genome's derived traits."""
+    """Return the genome's derived traits, computing them only once."""
     cached = getattr(genome, '_traits', None)
     if cached is None:
         cached = derive(genome)

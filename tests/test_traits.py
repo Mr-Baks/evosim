@@ -134,3 +134,51 @@ class TestTraitsFor:
         assert t.wear_resistance.aging == gp(GeneNames.WEAR_RESISTANCE, (180, 700), log=True)
         assert t.wear_resistance.cooldown == gp(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
         assert t.color.r == gp(GeneNames.COLOR_R, (0, 256))
+
+
+class TestFormulas:
+    """Physiological formulas now live on Traits and are used by systems/tests."""
+
+    def setup_method(self):
+        self.t = derive(genome_at(0.0))
+        self.lifespan = self.t.wear_resistance.aging            # sqrt(180 * 700)
+        self.base = self.t.metabolism * self.t.speed.metabolic ** 2
+
+    def test_wear_saturates_at_one(self):
+        assert self.t.wear(0) == pytest.approx(0.0)
+        assert self.t.wear(self.lifespan / 2) == pytest.approx(0.5)
+        assert self.t.wear(self.lifespan) == pytest.approx(1.0)
+        assert self.t.wear(self.lifespan * 2) == pytest.approx(1.0)
+
+    def test_vitality_is_one_minus_wear_to_the_shape(self):
+        # senescence_shape = 2 for this genome
+        assert self.t.vitality(0) == pytest.approx(1.0)
+        assert self.t.vitality(self.lifespan / 2) == pytest.approx(1 - 0.5 ** 2)
+        assert self.t.vitality(self.lifespan) == pytest.approx(0.0)
+        assert self.t.vitality(self.lifespan * 3) == pytest.approx(0.0)
+
+    def test_max_health_scales_vitality_to_100(self):
+        assert self.t.max_health(1.0) == pytest.approx(100.0)
+        assert self.t.max_health(0.25) == pytest.approx(25.0)
+        assert self.t.max_health(0.0) == pytest.approx(0.0)
+
+    def test_energy_drain_is_heavier_when_frail(self):
+        assert self.t.energy_drain(1.0) == pytest.approx(self.base * 1.0)
+        assert self.t.energy_drain(0.0) == pytest.approx(self.base * 2.0)
+
+    def test_hunger_drain_scales_with_lifespan(self):
+        assert self.t.hunger_drain() == pytest.approx(self.base * self.lifespan / 710)
+
+    def test_effective_fertility_applies_gate_and_shape(self):
+        shape = 1 - self.t.senescence_shape / 3
+        assert self.t.effective_fertility(1.0) == pytest.approx(self.t.fertility * shape)
+        # vitality below 0.5 halves the gate
+        assert self.t.effective_fertility(0.25) == pytest.approx(self.t.fertility * 0.5 * shape)
+
+    def test_regeneration_gain_and_cost(self):
+        assert self.t.regeneration_gain(0.5) == pytest.approx(
+            self.t.regeneration_increase * self.t.metabolism * 0.5
+        )
+        assert self.t.regeneration_cost() == pytest.approx(
+            self.t.regeneration_increase ** 2 * self.t.metabolism / 2
+        )

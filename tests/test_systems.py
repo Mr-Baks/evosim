@@ -10,9 +10,6 @@ from traits import traits_for
 from tests.helpers import (
     default_genes,
     make_decision_random_deterministic,
-    biochem_traits,
-    living_energy_cost,
-    living_hunger_cost,
 )
 
 
@@ -92,18 +89,18 @@ class TestVisionSystem:
 class TestBiochemistrySystem:
     # Drains are gene-derived: metabolism * speed**2 scaled, then weighted by
     # (2 - vitality) for energy and (wear_resistance / 710) for hunger.
-    # Expected values are computed from the same scaling in tests.helpers.
+    # Expected values come from the same formulas in traits.Traits.
 
     def test_biochemistry_system_energy_decay(self):
         e = Entity().add_component(Biochemistry(energy=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
         w = World(10, 10)
         w.place_entity(e, 5, 5)
 
-        traits = biochem_traits(e.get_component(Genome))
+        traits = traits_for(e.get_component(Genome))
         biochemistry_system({e}, w)
 
         bio = e.get_component(Biochemistry)
-        assert bio.energy == pytest.approx(100 - living_energy_cost(traits, age=1))
+        assert bio.energy == pytest.approx(100 - traits.energy_drain(traits.vitality(1)))
 
     def test_biochemistry_system_energy_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(energy=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
@@ -120,11 +117,11 @@ class TestBiochemistrySystem:
         w = World(10, 10)
         w.place_entity(e, 5, 5)
 
-        traits = biochem_traits(e.get_component(Genome))
+        traits = traits_for(e.get_component(Genome))
         biochemistry_system({e}, w)
 
         bio = e.get_component(Biochemistry)
-        assert bio.hunger == pytest.approx(100 - living_hunger_cost(traits))
+        assert bio.hunger == pytest.approx(100 - traits.hunger_drain())
 
     def test_biochemistry_system_hunger_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(hunger=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())

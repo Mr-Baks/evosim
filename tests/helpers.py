@@ -10,7 +10,6 @@ chosen so that senescence is negligible at a single tick of age, keeping
 the older metabolism/reproduction tests meaningful.
 """
 from genome import Gene, GeneNames, Genome
-from traits import traits_for
 
 
 def default_genes(**overrides) -> Genome:
@@ -53,38 +52,6 @@ def default_genes(**overrides) -> Genome:
     }
     values.update(overrides)
     return Genome([Gene(name, value, value) for name, value in values.items()])
-
-
-def biochem_traits(genome) -> dict:
-    """Derive the scaled trait values ``biochemistry_system`` reads."""
-    traits = traits_for(genome)
-    return {
-        'metabolism': traits.metabolism,
-        'speed': traits.speed.metabolic,
-        'fertility': traits.fertility,
-        'regeneration_threshold': traits.regeneration_threshold,
-        'regeneration_increase': traits.regeneration_increase,
-        'senescence_shape': traits.senescence_shape,
-        'wear_resistance': traits.wear_resistance.aging,
-    }
-
-
-def wear_and_vitality(traits: dict, age: float) -> tuple[float, float]:
-    """Mirror of the ageing model: wear = age / L (capped), vitality = 1 - wear^a."""
-    wear = min(1.0, age / traits['wear_resistance'])
-    vitality = max(0.0, 1.0 - wear ** traits['senescence_shape'])
-    return wear, vitality
-
-
-def living_energy_cost(traits: dict, age: float) -> float:
-    """Expected energy drained per tick while awake."""
-    _, vitality = wear_and_vitality(traits, age)
-    return traits['metabolism'] * traits['speed'] ** 2 * (2 - vitality)
-
-
-def living_hunger_cost(traits: dict) -> float:
-    """Expected hunger drained per tick."""
-    return traits['metabolism'] * traits['speed'] ** 2 * (traits['wear_resistance'] / 710)
 
 
 def make_decision_random_deterministic(monkeypatch, value: float = 1.0) -> None:

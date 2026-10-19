@@ -38,27 +38,18 @@ def biochemistry_system(entities: set[Entity], world: World):
         genome: Genome = e.get_component(Genome)
         traits = traits_for(genome)
 
-        metabolism = traits.metabolism
-        speed = traits.speed.metabolic
-        fertility = traits.fertility
-        regeneration_threshold = traits.regeneration_threshold
-        regeneration_increase = traits.regeneration_increase
-        senescence_shape = traits.senescence_shape
-        wear_resistance = traits.wear_resistance.aging
-
-        bio.age += 1 
-        wear = min(1, bio.age / wear_resistance)
-        bio.vitality = max(0, 1 - wear ** (senescence_shape))
-        bio.max_health = bio.vitality * 100
+        bio.age += 1
+        bio.vitality = traits.vitality(bio.age)
+        bio.max_health = traits.max_health(bio.vitality)
         if breedable:
-            breedable.fertility = fertility * min(1, bio.vitality * 2) * (1 - senescence_shape / 3)
-        
+            breedable.fertility = traits.effective_fertility(bio.vitality)
+
         if not queue.running or not isinstance(queue.running, SleepCommand):
-            bio.energy = max(bio.energy - metabolism * speed ** 2 * (2 - bio.vitality), 0)
+            bio.energy = max(bio.energy - traits.energy_drain(bio.vitality), 0)
             if bio.energy == 0:
                 bio.health = max(bio.health - 1, 0)
-        
-        bio.hunger = max(bio.hunger - metabolism * speed ** 2 * (wear_resistance / 710), 0)
+
+        bio.hunger = max(bio.hunger - traits.hunger_drain(), 0)
 
         if breedable:
             breedable.cooldown = max(breedable.cooldown - 1, 0)
@@ -66,10 +57,11 @@ def biochemistry_system(entities: set[Entity], world: World):
         if bio.hunger == 0:
             bio.health = max(bio.health - 1, 0)
 
-        if bio.energy > 60 and bio.hunger > 60 and bio.health < regeneration_threshold * bio.max_health:
-            bio.health += regeneration_increase * metabolism * bio.vitality
-            bio.energy -= regeneration_increase ** 2 * metabolism / 2
-            bio.hunger -= regeneration_increase ** 2 * metabolism / 2
+        if bio.energy > 60 and bio.hunger > 60 and bio.health < traits.regeneration_threshold * bio.max_health:
+            cost = traits.regeneration_cost()
+            bio.health += traits.regeneration_gain(bio.vitality)
+            bio.energy -= cost
+            bio.hunger -= cost
 
         bio.health = min(bio.health, bio.max_health)
         if bio.health <= 0:

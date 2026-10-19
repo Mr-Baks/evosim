@@ -19,11 +19,8 @@ from commands import CommandQueue, DeathCommand
 from entity import Biochemistry, Breedable, Entity, Movable
 from genome import GeneNames, Genome
 from systems import biochemistry_system
-from tests.helpers import (
-    biochem_traits,
-    default_genes,
-    wear_and_vitality,
-)
+from traits import traits_for
+from tests.helpers import default_genes
 from world import World
 
 
@@ -110,9 +107,8 @@ class TestVitality:
         w = World(10, 10)
         e = make_aging_entity(w, age=400, **SHORT_LIFE, **LINEAR)
         biochemistry_system({e}, w)
-        traits = biochem_traits(e.get_component(Genome))
-        wear, _ = wear_and_vitality(traits, 401)
-        assert wear == 1.0
+        traits = traits_for(e.get_component(Genome))
+        assert traits.wear(401) == 1.0
 
 
 class TestHealthScaling:
@@ -207,9 +203,8 @@ class TestReproductiveSenescence:
         e = make_aging_entity(w, age=0, **LONG_LIFE, **LINEAR,
                               **{GeneNames.FERTILITY: 1.0})
         biochemistry_system({e}, w)
-        traits = biochem_traits(e.get_component(Genome))
-        _, vitality = wear_and_vitality(traits, 1)
-        expected = 1.0 * min(1.0, vitality * 2) * (1 - traits['senescence_shape'] / 3)
+        traits = traits_for(e.get_component(Genome))
+        expected = traits.effective_fertility(traits.vitality(1))
         assert e.get_component(Breedable).fertility == pytest.approx(expected)
         assert e.get_component(Breedable).fertility == pytest.approx(2 / 3)
 
