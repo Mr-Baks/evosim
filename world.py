@@ -172,9 +172,12 @@ class World:
         x, y = entity.x, entity.y
 
         for dx, dy in self._get_offsets(radius):
-            entity = self.get_entity(x + dx, y + dy)
-            if entity:
-                neighbours.append(entity)
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < self.width and 0 <= ny < self.height:
+                entity = self.cells[ny][nx]
+                if entity:
+                    neighbours.append(entity)
+
         return sorted(neighbours, key=lambda e: e.eid)
 
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
