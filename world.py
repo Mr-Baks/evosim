@@ -112,6 +112,7 @@ class World:
             for dy in range(-1, 2):
                 self._offset_cache[1].append((dx, dy))
         self._offset_cache[1].remove((0, 0))
+        self._column_cache: dict[int, list[tuple[int, int, int]]] = {}
 
         self._eid_counter = 0
     
@@ -167,27 +168,44 @@ class World:
         self._offset_cache[radius] = offsets
         return offsets
 
+    def _get_column_offsets(self, radius: int) -> list[tuple[int, int, int]]:
+        if radius in self._column_cache:
+            return self._column_cache[radius]
+
+        columns = []
+        for dx, dy in self._get_offsets(radius):
+            if columns and columns[-1][0] == dx and dy == columns[-1][2] + 1:
+                columns[-1][2] = dy
+            else:
+                columns.append([dx, dy, dy])
+
+        self._column_cache[radius] = [tuple(column) for column in columns]
+        return self._column_cache[radius]
+
     def get_neighbours(self, entity: Entity, radius=1) -> list[Entity]:
         neighbours = []
         x, y = entity.x, entity.y
 
-        for dx, dy in self._get_offsets(radius):
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < self.width and 0 <= ny < self.height:
-                entity = self.cells[ny][nx]
-                if entity:
-                    neighbours.append(entity)
+        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
+            nx = x + dx
+            if 0 <= nx < self.width:
+                for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
+                    other = self.cells[ny][nx]
+                    if other:
+                        neighbours.append(other)
 
         return sorted(neighbours, key=lambda e: e.eid)
 
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         free_cells = []
-        offsets = self._get_offsets(radius=radius)
+        x, y = entity.x, entity.y
 
-        for (dx, dy) in offsets:
-            nx, ny = entity.x + dx, entity.y + dy
-            if self._check_cell(nx, ny):
-                free_cells.append((nx, ny))
+        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
+            nx = x + dx
+            if 0 <= nx < self.width:
+                for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
+                    if not self.cells[ny][nx]:
+                        free_cells.append((nx, ny))
 
         return free_cells
 
@@ -197,10 +215,11 @@ class World:
     
     def get_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         cells = []
-        offsets = self._get_offsets(radius=radius)
+        x, y = entity.x, entity.y
 
-        for (dx, dy) in offsets:
-            cells.append((entity.x + dx, entity.y + dy))
+        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
+            for ny in range(y + dy_lo, y + dy_hi + 1):
+                cells.append((x + dx, ny))
 
         return cells
 
