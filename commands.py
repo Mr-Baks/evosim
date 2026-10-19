@@ -9,6 +9,7 @@ import random
 import heapq
 from typing import Optional
 from genome import Genome, GeneNames
+from traits import traits_for
 
 
 class CommandStatus(Enum):
@@ -321,17 +322,14 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
 
     child.add_component(genome)
 
-    r = int(genome.get_phenotype(GeneNames.COLOR_R, (0, 256)))
-    g = int(genome.get_phenotype(GeneNames.COLOR_G, (0, 256)))
-    b = int(genome.get_phenotype(GeneNames.COLOR_B, (0, 256)))
-
-    render.color = (r, g, b)
+    traits = traits_for(genome)
+    render.color = (int(traits.color.r), int(traits.color.g), int(traits.color.b))
 
     movable = child.get_component(Movable)
-    movable.speed = genome.get_phenotype(GeneNames.SPEED, (0, 5))
+    movable.speed = traits.speed.locomotion
 
     breeadable = child.get_component(Breedable)
-    breeadable.fertility = genome.get_phenotype(GeneNames.FERTILITY, (0, 1))
+    breeadable.fertility = traits.fertility
 
     with open('logs/log.txt', 'a') as log:
         log.write(f'Mating at {parent2.x}, {parent2.y}\n')
@@ -360,8 +358,8 @@ class MateCommand(Command):
             x, y = free_cell
             world.place_entity(child, x, y)
 
-            entity.get_component(Breedable).cooldown = 100 + genome1.get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
-            self.partner.get_component(Breedable).cooldown = 100 + genome2.get_phenotype(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
+            entity.get_component(Breedable).cooldown = 100 + traits_for(genome1).wear_resistance.cooldown
+            self.partner.get_component(Breedable).cooldown = 100 + traits_for(genome2).wear_resistance.cooldown
 
             bio1.energy -= 70
             bio1.hunger -= 60

@@ -2,6 +2,7 @@ from commands import CommandQueue, CommandStatus
 from entity import *
 from world import World
 from commands import *
+from traits import traits_for
 import random
 
 
@@ -35,14 +36,15 @@ def biochemistry_system(entities: set[Entity], world: World):
         breedable: Breedable = e.get_component(Breedable)
         queue = e.get_component(CommandQueue)
         genome: Genome = e.get_component(Genome)
-        
-        metabolism = genome.get_phenotype(GeneNames.METABOLISM, (0.01, 2), log=True)
-        speed = genome.get_phenotype(GeneNames.SPEED, (1, 3))
-        fertility = genome.get_phenotype(GeneNames.FERTILITY, (0, 1))
-        regeneration_threshold = genome.get_phenotype(GeneNames.REGENERATION_THRESHOLD, (0, 1))
-        regeneration_increase = genome.get_phenotype(GeneNames.REGENERATION_INCREASE, (1, 5))
-        senescence_shape = genome.get_phenotype(GeneNames.SENESCENCE_SHAPE, (1, 3))
-        wear_resistance = genome.get_phenotype(GeneNames.WEAR_RESISTANCE, (180, 700), log=True)
+        traits = traits_for(genome)
+
+        metabolism = traits.metabolism
+        speed = traits.speed.metabolic
+        fertility = traits.fertility
+        regeneration_threshold = traits.regeneration_threshold
+        regeneration_increase = traits.regeneration_increase
+        senescence_shape = traits.senescence_shape
+        wear_resistance = traits.wear_resistance.aging
 
         bio.age += 1 
         wear = min(1, bio.age / wear_resistance)
@@ -94,7 +96,7 @@ def eat_utility(entity: Entity, world: World) -> float:
     food_count = sum(1 for ve in vision.visibles if ve.has_component(Eatable))
     food_factor = max(0.01, min(food_count / 3, 1))
     
-    genetic_drive = genome.get_phenotype(GeneNames.HUNGER_DRIVE, (0, 1))
+    genetic_drive = traits_for(genome).hunger_drive
     
     return hunger_factor * food_factor * genetic_drive
 
@@ -103,7 +105,7 @@ def sleep_utility(entity: Entity, world: World) -> float:
     genome: Genome = entity.get_component(Genome)
     
     energy_factor = 1 - (bio.energy / 200)
-    genetic_drive = genome.get_phenotype(GeneNames.SLEEP_DRIVE, (0, 1))
+    genetic_drive = traits_for(genome).sleep_drive
     
     return energy_factor * genetic_drive
 
@@ -116,8 +118,9 @@ def mate_utility(entity: Entity, world: World) -> float:
     if breedable is None:
         return -1
 
-    energy_threshold = genome.get_phenotype(GeneNames.MATING_ENERGY_THRESHOLD, (0, 200))
-    hunger_threshold = genome.get_phenotype(GeneNames.MATING_HUNGER_THRESHOLD, (0, 200))
+    traits = traits_for(genome)
+    energy_threshold = traits.mating_energy_threshold
+    hunger_threshold = traits.mating_hunger_threshold
     cooldown = breedable.cooldown
 
     if bio.energy < energy_threshold or bio.hunger < hunger_threshold or cooldown > 0:
@@ -128,7 +131,7 @@ def mate_utility(entity: Entity, world: World) -> float:
     partner_count = sum(1 for ve in vision.visibles if ve.has_component(Breedable))
     partner_factor = min(partner_count / 3, 1)
     
-    genetic_drive = genome.get_phenotype(GeneNames.MATING_DRIVE, (0, 1))
+    genetic_drive = traits.mating_drive
 
     fertility = breedable.fertility
     if fertility < 0.2: fertility = 0
@@ -148,7 +151,7 @@ def wander_utility(entity: Entity, world: World) -> float:
     plant_count = sum(1 for ve in vision.visibles if ve.has_component(Plant))
     plant_factor = 1 - min(plant_count / 5, 1)
     
-    genetic_drive = genome.get_phenotype(GeneNames.EXPLORATION_DRIVE, (0, 1))
+    genetic_drive = traits_for(genome).exploration_drive
     
     return biochemistry_factor * plant_factor * genetic_drive * creatures_factor
 

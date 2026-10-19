@@ -6,6 +6,7 @@ from entity import *
 from world import World
 from event_bus import EventBus
 from genome import Genome, GeneNames
+from traits import traits_for
 from tests.helpers import (
     default_genes,
     make_decision_random_deterministic,
@@ -312,9 +313,7 @@ class TestDecisionSystem:
         assert len(w.index.get_with(Movable)) == 4
 
         # Cooldown is derived from the parent's wear_resistance gene.
-        expected_cooldown = 100 + e1.get_component(Genome).get_phenotype(
-            GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True
-        )
+        expected_cooldown = 100 + traits_for(e1.get_component(Genome)).wear_resistance.cooldown
 
         # Interpretation cycle until the mating command completes
         for _ in range(15):

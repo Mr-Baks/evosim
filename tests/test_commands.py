@@ -7,6 +7,7 @@ from entity import *
 from world import World
 from event_bus import EventBus
 from genome import Gene, GeneNames, Genome
+from traits import traits_for
 from systems import command_system
 from tests.helpers import default_genes
 
@@ -400,10 +401,8 @@ class TestMateCommand:
 
         assert cmd.status == CommandStatus.COMPLETED
         # Cooldown is now derived from the parent's wear_resistance gene
-        # (MateCommand scaling (0.001, 300), log): default_genes -> 100 + 300.
-        expected_cooldown = 100 + e1.get_component(Genome).get_phenotype(
-            GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True
-        )
+        # (traits.WearResistance.cooldown): default_genes -> 100 + 300.
+        expected_cooldown = 100 + traits_for(e1.get_component(Genome)).wear_resistance.cooldown
         assert e1.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
         assert e2.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
 

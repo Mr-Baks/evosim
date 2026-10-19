@@ -10,6 +10,7 @@ chosen so that senescence is negligible at a single tick of age, keeping
 the older metabolism/reproduction tests meaningful.
 """
 from genome import Gene, GeneNames, Genome
+from traits import traits_for
 
 
 def default_genes(**overrides) -> Genome:
@@ -54,24 +55,17 @@ def default_genes(**overrides) -> Genome:
     return Genome([Gene(name, value, value) for name, value in values.items()])
 
 
-# Scaling the biochemistry system applies to each gene. Kept in one place so
-# tests can derive expected trait values without duplicating magic numbers.
-BIOCHEM_SCALING = {
-    'metabolism': (GeneNames.METABOLISM, (0.01, 2), True),
-    'speed': (GeneNames.SPEED, (1, 3), False),
-    'fertility': (GeneNames.FERTILITY, (0, 1), False),
-    'regeneration_threshold': (GeneNames.REGENERATION_THRESHOLD, (0, 1), False),
-    'regeneration_increase': (GeneNames.REGENERATION_INCREASE, (1, 5), False),
-    'senescence_shape': (GeneNames.SENESCENCE_SHAPE, (1, 3), False),
-    'wear_resistance': (GeneNames.WEAR_RESISTANCE, (180, 700), True),
-}
-
-
 def biochem_traits(genome) -> dict:
     """Derive the scaled trait values ``biochemistry_system`` reads."""
+    traits = traits_for(genome)
     return {
-        key: genome.get_phenotype(name, scaling, log=log)
-        for key, (name, scaling, log) in BIOCHEM_SCALING.items()
+        'metabolism': traits.metabolism,
+        'speed': traits.speed.metabolic,
+        'fertility': traits.fertility,
+        'regeneration_threshold': traits.regeneration_threshold,
+        'regeneration_increase': traits.regeneration_increase,
+        'senescence_shape': traits.senescence_shape,
+        'wear_resistance': traits.wear_resistance.aging,
     }
 
 
