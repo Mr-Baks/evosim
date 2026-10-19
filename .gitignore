@@ -16,3 +16,6 @@ __pycache__/
 # Logs: ignore the contents of logs/ but keep the directory itself
 logs/*
 !logs/.gitkeep
+
+# Local diagnostic scripts (profiling, benchmarks, golden checks)
+tools/
