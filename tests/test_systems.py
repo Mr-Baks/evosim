@@ -13,6 +13,14 @@ from tests.helpers import (
 )
 
 
+def wander_utility_of(entity) -> float:
+    """Call ``wander_utility`` with the counts its signature expects."""
+    bio = entity.get_component(Biochemistry)
+    genome = entity.get_component(Genome)
+    _, creatures, _, plants = visible_counts(entity.get_component(Vision))
+    return wander_utility(bio, genome, creatures, plants)
+
+
 class TestCommandSystem:
     def test_command_system_runs_running_command(self):
         e = Entity().add_component(CommandQueue()).add_component(State()).add_component(Movable()).add_component(Biochemistry())
@@ -354,14 +362,14 @@ class TestDecisionSystem:
 
         vision_system({lonely, crowded}, w)
 
-        assert wander_utility(crowded, w) > wander_utility(lonely, w)
+        assert wander_utility_of(crowded) > wander_utility_of(lonely)
 
     def test_wander_utility_drops_when_starving(self):
         # A starving creature should be less eager to wander aimlessly.
         fed = Entity().add_component(Biochemistry(hunger=0, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
         starving = Entity().add_component(Biochemistry(hunger=190, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
 
-        assert wander_utility(fed, None) > wander_utility(starving, None)
+        assert wander_utility_of(fed) > wander_utility_of(starving)
 
     def test_decision_system_skips_without_bio_or_vision(self):
         e = Entity().add_component(CommandQueue()).add_component(State()).add_component(Movable())
@@ -426,3 +434,19 @@ class TestSystemsIntegration:
 
         bio = e.get_component(Biochemistry)
         assert bio.hunger > 30
+
+
+class TestVisibleCounts:
+    def test_creature_counts_as_creature_and_partner(self):
+        # A creature has both Movable and Breedable, so it must be counted in
+        # both categories (an elif chain would drop it from partner_count and
+        # silently disable mating).
+        creature = Entity().add_component(Movable()).add_component(Breedable())
+        fruit = Entity().add_component(Eatable(nutrition=10))
+        plant = Entity().add_component(Plant())
+
+        vision = Vision()
+        vision.visibles = [creature, fruit, plant]
+
+        food, creatures, partners, plants = visible_counts(vision)
+        assert (food, creatures, partners, plants) == (1, 1, 1, 1)

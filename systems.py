@@ -78,35 +78,22 @@ def plant_system(entities: set[Entity], world: World):
                 plant.energy -= plant.fructify_threshold
                 world.place_entity(fruit, *random.choice(free_cells))
 
-def eat_utility(entity: Entity, world: World) -> float:
-    vision: Vision = entity.get_component(Vision)
-    bio: Biochemistry = entity.get_component(Biochemistry)
-    genome: Genome = entity.get_component(Genome)
-    
+def eat_utility(bio: Biochemistry, genome: Genome, food_count: int) -> float:
     hunger_factor = 1 - (bio.hunger / 200)
     
-    food_count = sum(1 for ve in vision.visibles if ve.has_component(Eatable))
     food_factor = max(0.01, min(food_count / 3, 1))
-    
+
     genetic_drive = traits_for(genome).hunger_drive
     
     return hunger_factor * food_factor * genetic_drive
 
-def sleep_utility(entity: Entity, world: World) -> float:
-    bio: Biochemistry = entity.get_component(Biochemistry)
-    genome: Genome = entity.get_component(Genome)
-    
+def sleep_utility(bio: Biochemistry, genome: Genome) -> float:
     energy_factor = 1 - (bio.energy / 200)
     genetic_drive = traits_for(genome).sleep_drive
     
     return energy_factor * genetic_drive
 
-def mate_utility(entity: Entity, world: World) -> float:
-    vision: Vision = entity.get_component(Vision)
-    bio: Biochemistry = entity.get_component(Biochemistry)
-    genome: Genome = entity.get_component(Genome)
-    breedable: Breedable = entity.get_component(Breedable)
-
+def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partner_count: int) -> float:
     if breedable is None:
         return -1
 
@@ -120,7 +107,6 @@ def mate_utility(entity: Entity, world: World) -> float:
     
     biochemistry_factor = ((bio.hunger + bio.energy) / 400)
     
-    partner_count = sum(1 for ve in vision.visibles if ve.has_component(Breedable))
     partner_factor = min(partner_count / 3, 1)
     
     genetic_drive = traits.mating_drive
@@ -130,37 +116,50 @@ def mate_utility(entity: Entity, world: World) -> float:
     
     return biochemistry_factor * partner_factor * genetic_drive * fertility
 
-def wander_utility(entity: Entity, world: World) -> float:
-    vision: Vision = entity.get_component(Vision)
-    bio: Biochemistry = entity.get_component(Biochemistry)
-    genome: Genome = entity.get_component(Genome)
+def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plant_count: int) -> float:
     
     biochemistry_factor = min(1, max(0.2, 2 * (1 - (bio.hunger / 200))))
     
-    creatures_count = sum(1 for ve in vision.visibles if ve.has_component(Movable))
     creatures_factor = min(1, max(creatures_count / 5, 0.01))
 
-    plant_count = sum(1 for ve in vision.visibles if ve.has_component(Plant))
     plant_factor = 1 - min(plant_count / 5, 1)
     
     genetic_drive = traits_for(genome).exploration_drive
     
     return biochemistry_factor * plant_factor * genetic_drive * creatures_factor
 
+def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
+    food = creatures = partners = plants = 0
+    for ve in vision.visibles:
+        if ve.has_component(Eatable):
+            food += 1
+        if ve.has_component(Movable):
+            creatures += 1
+        if ve.has_component(Breedable):
+            partners += 1
+        if ve.has_component(Plant):
+            plants += 1
+    return food, creatures, partners, plants
+
 def logging_system(entities: set[Entity], world: World):
     log = ''
 
     for i, e in enumerate(entities):
-        queue: CommandQueue = e.get_component(CommandQueue)
         state: State = e.get_component(State)
+        vision: Vision = e.get_component(Vision)
         bio: Biochemistry = e.get_component(Biochemistry)
+        genome: Genome = e.get_component(Genome)
+        breedable: Breedable = e.get_component(Breedable)
+        queue: CommandQueue = e.get_component(CommandQueue)
+
+        food_count, creatures_count, partner_count, plant_count = visible_counts(vision)
 
         uts = {
-                    'eat': eat_utility(e, world),
-                    'sleep': sleep_utility(e, world),
-                    'mating': mate_utility(e, world),
-                    'idle': wander_utility(e, world),
-                }
+            'eat': eat_utility(bio, genome, food_count),
+            'sleep': sleep_utility(bio, genome),
+            'mating': mate_utility(bio, genome, breedable, partner_count),
+            'idle': wander_utility(bio, genome, creatures_count, plant_count),
+        }
 
         log += f'Entity {i} at {e.x}, {e.y}:\n'
         log += f'   Running command: {queue.running.target_state if queue.running else None} | queue\'s len: {len(queue.queue)}\n'
@@ -177,15 +176,18 @@ def decision_system(entities: set[Entity], world: World):
         vision: Vision = e.get_component(Vision)
         bio: Biochemistry = e.get_component(Biochemistry)
         genome: Genome = e.get_component(Genome)
+        breedable: Breedable = e.get_component(Breedable)
 
         if not (bio and vision and genome):
             continue
 
+        food_count, creatures_count, partner_count, plant_count = visible_counts(vision)
+
         utilities = {
-            'eat': eat_utility(e, world),
-            'sleep': sleep_utility(e, world),
-            'mating': mate_utility(e, world),
-            'idle': wander_utility(e, world),
+            'eat': eat_utility(bio, genome, food_count),
+            'sleep': sleep_utility(bio, genome),
+            'mating': mate_utility(bio, genome, breedable, partner_count),
+            'idle': wander_utility(bio, genome, creatures_count, plant_count),
         }
 
         action = max(utilities, key=utilities.get)
