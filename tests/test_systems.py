@@ -98,18 +98,22 @@ class TestVisionSystem:
 class TestBiochemistrySystem:
     # Drains are gene-derived: metabolism * speed**2 scaled, then weighted by
     # (2 - vitality) for energy and (wear_resistance / 710) for hunger.
-    # Expected values come from the same formulas in traits.Traits.
+    # The assertions below check properties (who drains more), not a copy of
+    # the formula, so they survive balance changes.
 
-    def test_biochemistry_system_energy_decay(self):
-        e = Entity().add_component(Biochemistry(energy=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
+    def test_biochemistry_system_energy_drain_grows_as_vitality_falls(self):
         w = World(10, 10)
-        w.place_entity(e, 5, 5)
+        young = Entity().add_component(Biochemistry(energy=100, age=0)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
+        old = Entity().add_component(Biochemistry(energy=100, age=650)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
+        w.place_entity(young, 4, 5)
+        w.place_entity(old, 6, 5)
 
-        traits = traits_for(e.get_component(Genome))
-        biochemistry_system({e}, w)
+        biochemistry_system({young, old}, w)
 
-        bio = e.get_component(Biochemistry)
-        assert bio.energy == pytest.approx(100 - traits.energy_drain(traits.vitality(1)))
+        young_drain = 100 - young.get_component(Biochemistry).energy
+        old_drain = 100 - old.get_component(Biochemistry).energy
+        assert young_drain > 0
+        assert old_drain > young_drain
 
     def test_biochemistry_system_energy_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(energy=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
@@ -121,16 +125,19 @@ class TestBiochemistrySystem:
         bio = e.get_component(Biochemistry)
         assert bio.health == 99
 
-    def test_biochemistry_system_hunger_decay(self):
-        e = Entity().add_component(Biochemistry(hunger=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
+    def test_biochemistry_system_hunger_drain_scales_with_lifespan(self):
         w = World(10, 10)
-        w.place_entity(e, 5, 5)
+        short = Entity().add_component(Biochemistry(hunger=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes(**{GeneNames.WEAR_RESISTANCE: -1.0}))
+        long = Entity().add_component(Biochemistry(hunger=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes(**{GeneNames.WEAR_RESISTANCE: 1.0}))
+        w.place_entity(short, 4, 5)
+        w.place_entity(long, 6, 5)
 
-        traits = traits_for(e.get_component(Genome))
-        biochemistry_system({e}, w)
+        biochemistry_system({short, long}, w)
 
-        bio = e.get_component(Biochemistry)
-        assert bio.hunger == pytest.approx(100 - traits.hunger_drain())
+        short_drain = 100 - short.get_component(Biochemistry).hunger
+        long_drain = 100 - long.get_component(Biochemistry).hunger
+        assert short_drain > 0
+        assert long_drain > short_drain
 
     def test_biochemistry_system_hunger_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(hunger=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())

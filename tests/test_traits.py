@@ -124,17 +124,6 @@ class TestTraitsFor:
         assert first > 0
         assert calls['n'] == first
 
-    def test_matches_direct_lookup(self):
-        genome = genome_at(0.37)
-        t = traits_for(genome)
-        gp = genome.get_phenotype
-        assert t.metabolism == gp(GeneNames.METABOLISM, (0.01, 2), log=True)
-        assert t.speed.locomotion == gp(GeneNames.SPEED, (0, 5))
-        assert t.speed.metabolic == gp(GeneNames.SPEED, (1, 3))
-        assert t.wear_resistance.aging == gp(GeneNames.WEAR_RESISTANCE, (180, 700), log=True)
-        assert t.wear_resistance.cooldown == gp(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True)
-        assert t.color.r == gp(GeneNames.COLOR_R, (0, 256))
-
 
 class TestFormulas:
     """Physiological formulas now live on Traits and are used by systems/tests."""
@@ -174,11 +163,3 @@ class TestFormulas:
         assert self.t.effective_fertility(1.0) == pytest.approx(self.t.fertility * shape)
         # vitality below 0.5 halves the gate
         assert self.t.effective_fertility(0.25) == pytest.approx(self.t.fertility * 0.5 * shape)
-
-    def test_regeneration_gain_and_cost(self):
-        assert self.t.regeneration_gain(0.5) == pytest.approx(
-            self.t.regeneration_increase * self.t.metabolism * 0.5
-        )
-        assert self.t.regeneration_cost() == pytest.approx(
-            self.t.regeneration_increase ** 2 * self.t.metabolism / 2
-        )

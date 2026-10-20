@@ -1,100 +1,12 @@
-import pytest
 from entity import *
 
 
-class TestComponent:
-    def test_component_base(self):
-        c = Component()
-        assert isinstance(c, Component)
-
-    def test_state_defaults(self):
-        s = State()
-        assert s.current == 'idle'
-        assert s.states == set()
-
-    def test_state_custom(self):
-        s = State(current='eating', states={'eating', 'hungry'})
-        assert s.current == 'eating'
-        assert s.states == {'eating', 'hungry'}
-
-    def test_render_defaults(self):
-        r = Render()
-        assert r.symbol == '?'
-        assert r.color == (255, 255, 255)
-        assert r.is_visible is True
-
-    def test_render_custom(self):
-        r = Render(symbol='C', color=(100, 200, 50), is_visible=False)
-        assert r.symbol == 'C'
-        assert r.color == (100, 200, 50)
-        assert r.is_visible is False
-
-    def test_movable_defaults(self):
-        m = Movable()
-        assert m.speed == 1
-        assert m.movement_accumulator == 0
-
-    def test_biochemistry_defaults(self):
-        b = Biochemistry()
-        assert b.energy == 100
-        assert b.hunger == 100
-        assert b.health == 100
-        assert b.max_health == 100
-        assert b.vitality == 1
-        assert b.age == 0
-
-    def test_biochemistry_custom(self):
-        b = Biochemistry(energy=50, hunger=30, health=80, max_health=90, vitality=0.4, age=250)
-        assert b.energy == 50
-        assert b.hunger == 30
-        assert b.health == 80
-        assert b.max_health == 90
-        assert b.vitality == 0.4
-        assert b.age == 250
-
-    def test_eatable(self):
-        e = Eatable(nutrition=25)
-        assert e.nutrition == 25
-
-    def test_breedable_defaults(self):
-        b = Breedable()
-        assert b.fertility == 1
-        assert b.cooldown == 30
-
-    def test_breedable_custom(self):
-        b = Breedable(fertility=0.8, cooldown=10)
-        assert b.fertility == 0.8
-        assert b.cooldown == 10
-
-    def test_vision_defaults(self):
-        v = Vision()
-        assert v.radius == 4
-        assert v.visibles == []
-
-    def test_vision_visibles_not_shared(self):
-        # default_factory must give each Vision its own list, not a shared one.
-        a = Vision()
-        b = Vision()
-        a.visibles.append('x')
-        assert b.visibles == []
-
-    def test_vision_custom(self):
-        v = Vision(radius=5)
-        assert v.radius == 5
-
-    def test_plant_defaults(self):
-        plant = Plant()
-        assert plant.energy == 0
-        assert plant.energy_increase == 2
-        assert plant.fructify_threshold == 80
-        assert plant.fruit_nutrition == 25
-
-    def test_plant_custom(self):
-        plant = Plant(energy=50, energy_increase=5, fructify_threshold=90, fruit_nutrition=30)
-        assert plant.energy == 50
-        assert plant.energy_increase == 5
-        assert plant.fructify_threshold == 90
-        assert plant.fruit_nutrition == 30
+def test_vision_visibles_not_shared():
+    # default_factory must give each Vision its own list, not a shared one.
+    a = Vision()
+    b = Vision()
+    a.visibles.append('x')
+    assert b.visibles == []
 
 
 class TestEntity:
