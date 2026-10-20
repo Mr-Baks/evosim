@@ -1,4 +1,5 @@
 from commands import CommandQueue, CommandStatus
+from config import BalanceConfig
 from entity import *
 from world import World
 from commands import *
@@ -44,10 +45,12 @@ def biochemistry_system(entities: set[Entity], world: World):
         if breedable:
             breedable.fertility = traits.effective_fertility(bio.vitality)
 
+        decay = world.balance.health_decay
+
         if not queue.running or not isinstance(queue.running, SleepCommand):
             bio.energy = max(bio.energy - traits.energy_drain(bio.vitality), 0)
             if bio.energy == 0:
-                bio.health = max(bio.health - 1, 0)
+                bio.health = max(bio.health - decay, 0)
 
         bio.hunger = max(bio.hunger - traits.hunger_drain(), 0)
 
@@ -55,9 +58,11 @@ def biochemistry_system(entities: set[Entity], world: World):
             breedable.cooldown = max(breedable.cooldown - 1, 0)
 
         if bio.hunger == 0:
-            bio.health = max(bio.health - 1, 0)
+            bio.health = max(bio.health - decay, 0)
 
-        if bio.energy > 60 and bio.hunger > 60 and bio.health < traits.regeneration_threshold * bio.max_health:
+        if (bio.energy > world.balance.regeneration_energy_min
+                and bio.hunger > world.balance.regeneration_hunger_min
+                and bio.health < traits.regeneration_threshold * bio.max_health):
             cost = traits.regeneration_cost()
             bio.health += traits.regeneration_gain(bio.vitality)
             bio.energy -= cost
@@ -65,12 +70,12 @@ def biochemistry_system(entities: set[Entity], world: World):
 
         bio.health = min(bio.health, bio.max_health)
         if bio.health <= 0:
-            push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=50))
+            push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=world.balance.corpse_nutrition))
 
 def plant_system(entities: set[Entity], world: World):
     for e in entities:
         plant: Plant = e.get_component(Plant)
-        plant.energy = min(plant.energy + plant.energy_increase, 180)
+        plant.energy = min(plant.energy + plant.energy_increase, world.balance.plant_energy_cap)
         if plant.energy > plant.fructify_threshold:
             free_cells = world.get_free_cells_near(e)
             if free_cells:
@@ -78,22 +83,22 @@ def plant_system(entities: set[Entity], world: World):
                 plant.energy -= plant.fructify_threshold
                 world.place_entity(fruit, *random.choice(free_cells))
 
-def eat_utility(bio: Biochemistry, genome: Genome, food_count: int) -> float:
-    hunger_factor = 1 - (bio.hunger / 200)
-    
-    food_factor = max(0.01, min(food_count / 3, 1))
+def eat_utility(bio: Biochemistry, genome: Genome, food_count: int, balance: BalanceConfig) -> float:
+    hunger_factor = 1 - (bio.hunger / balance.hunger_scale)
+
+    food_factor = max(0.01, min(food_count / balance.food_saturation, 1))
 
     genetic_drive = traits_for(genome).hunger_drive
-    
+
     return hunger_factor * food_factor * genetic_drive
 
-def sleep_utility(bio: Biochemistry, genome: Genome) -> float:
-    energy_factor = 1 - (bio.energy / 200)
+def sleep_utility(bio: Biochemistry, genome: Genome, balance: BalanceConfig) -> float:
+    energy_factor = 1 - (bio.energy / balance.energy_scale)
     genetic_drive = traits_for(genome).sleep_drive
-    
+
     return energy_factor * genetic_drive
 
-def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partner_count: int) -> float:
+def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partner_count: int, balance: BalanceConfig) -> float:
     if breedable is None:
         return -1
 
@@ -104,28 +109,28 @@ def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partne
 
     if bio.energy < energy_threshold or bio.hunger < hunger_threshold or cooldown > 0:
         return -1
-    
-    biochemistry_factor = ((bio.hunger + bio.energy) / 400)
-    
-    partner_factor = min(partner_count / 3, 1)
-    
+
+    biochemistry_factor = ((bio.hunger + bio.energy) / (balance.hunger_scale + balance.energy_scale))
+
+    partner_factor = min(partner_count / balance.partner_saturation, 1)
+
     genetic_drive = traits.mating_drive
 
     fertility = breedable.fertility
-    if fertility < 0.2: fertility = 0
-    
+    if fertility < balance.fertility_min: fertility = 0
+
     return biochemistry_factor * partner_factor * genetic_drive * fertility
 
-def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plant_count: int) -> float:
-    
-    biochemistry_factor = min(1, max(0.2, 2 * (1 - (bio.hunger / 200))))
-    
-    creatures_factor = min(1, max(creatures_count / 5, 0.01))
+def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plant_count: int, balance: BalanceConfig) -> float:
 
-    plant_factor = 1 - min(plant_count / 5, 1)
-    
+    biochemistry_factor = min(1, max(0.2, 2 * (1 - (bio.hunger / balance.hunger_scale))))
+
+    creatures_factor = min(1, max(creatures_count / balance.creature_saturation, 0.01))
+
+    plant_factor = 1 - min(plant_count / balance.plant_saturation, 1)
+
     genetic_drive = traits_for(genome).exploration_drive
-    
+
     return biochemistry_factor * plant_factor * genetic_drive * creatures_factor
 
 def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
@@ -155,10 +160,10 @@ def logging_system(entities: set[Entity], world: World):
         food_count, creatures_count, partner_count, plant_count = visible_counts(vision)
 
         uts = {
-            'eat': eat_utility(bio, genome, food_count),
-            'sleep': sleep_utility(bio, genome),
-            'mating': mate_utility(bio, genome, breedable, partner_count),
-            'idle': wander_utility(bio, genome, creatures_count, plant_count),
+            'eat': eat_utility(bio, genome, food_count, world.balance),
+            'sleep': sleep_utility(bio, genome, world.balance),
+            'mating': mate_utility(bio, genome, breedable, partner_count, world.balance),
+            'idle': wander_utility(bio, genome, creatures_count, plant_count, world.balance),
         }
 
         log += f'Entity {i} at {e.x}, {e.y}:\n'
@@ -184,10 +189,10 @@ def decision_system(entities: set[Entity], world: World):
         food_count, creatures_count, partner_count, plant_count = visible_counts(vision)
 
         utilities = {
-            'eat': eat_utility(bio, genome, food_count),
-            'sleep': sleep_utility(bio, genome),
-            'mating': mate_utility(bio, genome, breedable, partner_count),
-            'idle': wander_utility(bio, genome, creatures_count, plant_count),
+            'eat': eat_utility(bio, genome, food_count, world.balance),
+            'sleep': sleep_utility(bio, genome, world.balance),
+            'mating': mate_utility(bio, genome, breedable, partner_count, world.balance),
+            'idle': wander_utility(bio, genome, creatures_count, plant_count, world.balance),
         }
 
         action = max(utilities, key=utilities.get)
@@ -199,7 +204,7 @@ def decision_system(entities: set[Entity], world: World):
                 food_candidates.sort(key=lambda f: abs(e.x - f.x) + abs(e.y - f.y))
                 for f in food_candidates:
                     free_cell = world.get_free_cell_near(f)
-                    if free_cell and random.random() > 0.3:
+                    if free_cell and random.random() > world.balance.eat_reconsider_chance:
                         tx, ty = free_cell
                         push_command(e, world, 
                                      MoveToTargetCommand(x=tx, y=ty, emergency=15), 
@@ -208,13 +213,13 @@ def decision_system(entities: set[Entity], world: World):
                                      )
                         break
                 else:
-                    push_command(e, world, WanderCommand(radius=6, target_state=action))
+                    push_command(e, world, WanderCommand(radius=world.balance.wander_fallback_radius, target_state=action))
         elif action == 'sleep':
             if bio.hunger == 0:
                 ticks_to_sleep = 1
             else:
-                ticks_to_sleep = round((200 - bio.energy) / SleepCommand.energy_increase)
-            push_command(e, world, SleepCommand(emergency=10, ticks_to_sleep=ticks_to_sleep, target_state=action))
+                ticks_to_sleep = round((world.balance.sleep_target_energy - bio.energy) / world.balance.sleep_energy_increase)
+            push_command(e, world, SleepCommand(emergency=10, ticks_to_sleep=ticks_to_sleep, energy_increase=world.balance.sleep_energy_increase, target_state=action))
         elif action == 'mating': 
             partners = [ve for ve in vision.visibles if ve.has_component(Breedable) and ve is not e]
             if partners:
@@ -230,5 +235,5 @@ def decision_system(entities: set[Entity], world: World):
                                      )
                         break
         elif 'idle' not in state.states:
-            push_command(e, world, WanderCommand(radius=8, target_state=action))
+            push_command(e, world, WanderCommand(radius=world.balance.wander_radius, target_state=action))
 

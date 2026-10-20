@@ -33,7 +33,11 @@ def make_food(x, y, world: World, nutrition=20):
 
 def make_plant(x, y, world: World, cfg: SimConfig):
     threshold = random.randint(cfg.balance.plant_fructify_min, cfg.balance.plant_fructify_max)
-    e = Entity().add_component(Plant(fructify_threshold=threshold)).add_component(Render(symbol='P', color=(0, 200, 10)))
+    e = (Entity()
+         .add_component(Plant(energy_increase=cfg.balance.plant_energy_increase,
+                              fructify_threshold=threshold,
+                              fruit_nutrition=cfg.balance.plant_fruit_nutrition))
+         .add_component(Render(symbol='P', color=(0, 200, 10))))
     world.place_entity(e, x, y)
 
 def tick_stats(sim: Simulation):
@@ -56,6 +60,7 @@ def _scatter(sim: Simulation, count: int, make):
 def build_simulation(cfg: SimConfig) -> Simulation:
     """Assemble the default world described by ``cfg`` (no stepping)."""
     sim = Simulation(cfg.run.tickspeed, cfg.run.fps, cfg.scenario.world.size, background_sym='.')
+    sim.world.balance = cfg.balance
 
     sim.world.event_bus.subscribe(EatEvent, on_eat)
     sim.world.event_bus.subscribe(SleepEvent, on_sleep)

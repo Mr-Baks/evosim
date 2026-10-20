@@ -1,5 +1,6 @@
 import pytest
 
+from config import BalanceConfig
 from systems import *
 from commands import *
 from entity import *
@@ -18,7 +19,7 @@ def wander_utility_of(entity) -> float:
     bio = entity.get_component(Biochemistry)
     genome = entity.get_component(Genome)
     _, creatures, _, plants = visible_counts(entity.get_component(Vision))
-    return wander_utility(bio, genome, creatures, plants)
+    return wander_utility(bio, genome, creatures, plants, BalanceConfig())
 
 
 class TestCommandSystem:
@@ -450,3 +451,24 @@ class TestVisibleCounts:
 
         food, creatures, partners, plants = visible_counts(vision)
         assert (food, creatures, partners, plants) == (1, 1, 1, 1)
+
+
+class TestBalanceWiring:
+    def test_plant_system_uses_energy_cap(self):
+        w = World(10, 10)
+        w.balance = BalanceConfig(plant_energy_cap=10)
+        plant = Entity().add_component(Plant(energy=9, energy_increase=5, fructify_threshold=80))
+        w.place_entity(plant, 5, 5)
+
+        plant_system({plant}, w)
+
+        assert plant.get_component(Plant).energy == 10
+
+    def test_eat_utility_uses_food_saturation(self):
+        bio = Biochemistry(hunger=100)
+        genome = default_genes()
+
+        default = eat_utility(bio, genome, 1, BalanceConfig())
+        saturated = eat_utility(bio, genome, 1, BalanceConfig(food_saturation=10))
+
+        assert default > saturated

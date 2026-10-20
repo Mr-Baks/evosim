@@ -1,4 +1,5 @@
 from typing import Optional
+from config import BalanceConfig
 from entity import *
 from event_bus import EventBus
 import random
@@ -97,7 +98,7 @@ class QueryIndex:
         return [e for e in lists[0] if all(e in other for other in others)]
         
 class World:
-    def __init__(self, width: int = 60, height: int = 15):
+    def __init__(self, width: int = 60, height: int = 15, balance: BalanceConfig | None = None):
         self.cells: list[list[Optional[Entity]]] = [[None for _ in range(width)] for _ in range(height)]
         self.index = QueryIndex()
         self.event_bus = EventBus()
@@ -105,6 +106,7 @@ class World:
         self.pending_component_removal: dict[Entity, list[Component]] = {}
         self.width = width
         self.height = height
+        self.balance = balance if balance is not None else BalanceConfig()
         self._offset_cache = {}
 
         self._offset_cache[1] = []

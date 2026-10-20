@@ -1,15 +1,3 @@
-"""Typed, dependency-light configuration for EvoSim.
-
-Three layers, grouped by how often they change:
-
-* ``RunConfig``      -- a single run: seed, length, output. Swept across seeds.
-* ``ScenarioConfig`` -- initial conditions: world size, counts, founder genome.
-* ``BalanceConfig``  -- world "physics". Reserved skeleton: the systems still
-  read their own literals, so changing a value here does NOT yet affect a run.
-  Wire it in incrementally, only when an experiment asks to vary a parameter.
-
-Precedence: dataclass defaults -> TOML file -> CLI flags.
-"""
 import argparse
 import json
 import tomllib
@@ -30,9 +18,6 @@ class WorldConfig:
         return (self.width, self.height)
 
 
-# One founder gene: (name, allele1, allele2, dominant). Alleles and dominance
-# are kept explicit so the founder stays an exact reproduction of the genome
-# currently hard-coded in ``make_creature``.
 FounderGene = tuple[str, float, float, bool]
 
 DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
@@ -64,26 +49,28 @@ class ScenarioConfig:
 
 @dataclass(frozen=True)
 class BalanceConfig:
-    """Reserved "physics" parameters.
-
-    Values mirror the current literals so that wiring them in later is a no-op
-    refactor. Nothing here is consumed by the systems yet.
-    """
-    # plants
+    """World "physics": parameters that shape population dynamics."""
     plant_energy_increase: int = 2
+    plant_energy_cap: int = 180
     plant_fructify_min: int = 70
     plant_fructify_max: int = 90
     plant_fruit_nutrition: int = 25
-    # corpses
+    
     corpse_nutrition: int = 50
-    # mating
+    
+    health_decay: float = 1.0
+    regeneration_energy_min: float = 60.0
+    regeneration_hunger_min: float = 60.0
+    
     mating_energy_cost: float = 70.0
     mating_hunger_cost: float = 60.0
     mating_cooldown_base: int = 100
     mating_cooldown_scaling: tuple[float, float] = (0.001, 300.0)
-    # sleep
+    fertility_min: float = 0.2
+    
     sleep_energy_increase: int = 50
-    # utility saturation constants
+    sleep_target_energy: float = 200.0
+    
     hunger_scale: float = 200.0
     energy_scale: float = 200.0
     food_saturation: int = 3

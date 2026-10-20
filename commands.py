@@ -444,13 +444,13 @@ class MateCommand(Command):
             x, y = free_cell
             world.place_entity(child, x, y)
 
-            entity.get_component(Breedable).cooldown = 100 + traits_for(genome1).wear_resistance.cooldown
-            self.partner.get_component(Breedable).cooldown = 100 + traits_for(genome2).wear_resistance.cooldown
+            entity.get_component(Breedable).cooldown = world.balance.mating_cooldown_base + traits_for(genome1).wear_resistance.cooldown
+            self.partner.get_component(Breedable).cooldown = world.balance.mating_cooldown_base + traits_for(genome2).wear_resistance.cooldown
 
-            bio1.energy -= 70
-            bio1.hunger -= 60
-            bio2.energy -= 70
-            bio2.hunger -= 60
+            bio1.energy -= world.balance.mating_energy_cost
+            bio1.hunger -= world.balance.mating_hunger_cost
+            bio2.energy -= world.balance.mating_energy_cost
+            bio2.hunger -= world.balance.mating_hunger_cost
 
             self.complete(entity)
         else:
