@@ -321,6 +321,33 @@ class TestWorld:
         neighbours = world.get_neighbours(center, radius=2)
         assert e1 in neighbours
 
+    def test_count_near_respects_condition(self):
+        world = World(10, 10)
+        center = Entity().add_component(Movable())
+        mover = Entity().add_component(Movable())
+        plant = Entity().add_component(Plant())
+        world.place_entity(center, 5, 5)
+        world.place_entity(mover, 5, 6)
+        world.place_entity(plant, 6, 5)
+
+        assert world.count_near(5, 5, lambda e: e.has_component(Movable), radius=2) == 1
+        assert world.count_near(5, 5, lambda e: e.has_component(Plant), radius=2) == 1
+        assert world.count_near(5, 5, lambda e: True, radius=2) == 2
+
+    def test_count_near_excludes_center_and_uses_euclidean_radius(self):
+        world = World(10, 10)
+        center = Entity()
+        inside = Entity()
+        diagonal = Entity()
+        outside = Entity()
+        world.place_entity(center, 5, 5)
+        world.place_entity(inside, 7, 5)
+        world.place_entity(diagonal, 7, 6)
+        world.place_entity(outside, 8, 5)
+
+        assert world.count_near(5, 5, lambda e: True, radius=2) == 1
+        assert world.count_near(5, 5, lambda e: True, radius=3) == 3
+
     def test_get_free_cells_near(self):
         world = World(10, 10)
         center = Entity().add_component(Biochemistry())

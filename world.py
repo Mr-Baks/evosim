@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 from config import BalanceConfig
 from entity import *
 from event_bus import EventBus
@@ -198,16 +198,16 @@ class World:
 
         return sorted(neighbours, key=lambda e: e.eid)
 
-    def count_near(self, x: int, y: int, condition: callable[Entity, bool], radius: int = 3) -> int:
+    def count_near(self, x: int, y: int, condition: Callable[[Entity], bool], radius: int = 3) -> int:
         count = 0
 
         for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
-                    nx = x + dx
-                    if 0 <= nx < self.width:
-                        for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
-                            entity = self.cells[ny][nx]
-                            if entity:
-                                count += 1 if condition(entity) else 0
+            nx = x + dx
+            if 0 <= nx < self.width:
+                for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
+                    entity = self.cells[ny][nx]
+                    if entity and condition(entity):
+                        count += 1
 
         return count
 
