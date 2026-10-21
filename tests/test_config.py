@@ -30,6 +30,19 @@ class TestDefaults:
     def test_world_size_property(self):
         assert WorldConfig(30, 20).size == (30, 20)
 
+    def test_default_balance_is_long_horizon_plateau(self):
+        balance = SimConfig().balance
+        assert balance.plant_energy_cap == 150
+        assert balance.plant_fruit_nutrition == 20
+        assert balance.mating_energy_cost == 110
+        assert balance.mating_hunger_cost == 110
+        assert balance.mating_cooldown_base == 100
+        assert balance.sleep_energy_increase == 45
+
+    def test_default_founder_has_low_metabolism(self):
+        genes = {gene[0]: gene for gene in DEFAULT_FOUNDER_GENES}
+        assert genes[GeneNames.METABOLISM] == (GeneNames.METABOLISM, -0.8, -0.7, False)
+
 
 class TestFromDict:
     def test_nested_overrides(self):

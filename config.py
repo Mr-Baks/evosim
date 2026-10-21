@@ -25,7 +25,7 @@ DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
     (GeneNames.HUNGER_DRIVE, 0.5, 0.5, True),
     (GeneNames.SLEEP_DRIVE, 0.5, 0.5, True),
     (GeneNames.EXPLORATION_DRIVE, 0.5, 0.5, True),
-    (GeneNames.METABOLISM, 0.1, 0.2, False),
+    (GeneNames.METABOLISM, -0.8, -0.7, False),
     (GeneNames.MATING_DRIVE, 1.0, 1.0, True),
     (GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2, True),
     (GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2, True),
@@ -51,10 +51,10 @@ class ScenarioConfig:
 class BalanceConfig:
     """World "physics": parameters that shape population dynamics."""
     plant_energy_increase: int = 2
-    plant_energy_cap: int = 180
+    plant_energy_cap: int = 150
     plant_fructify_min: int = 70
     plant_fructify_max: int = 90
-    plant_fruit_nutrition: int = 25
+    plant_fruit_nutrition: int = 20
     
     corpse_nutrition: int = 50
     
@@ -62,13 +62,13 @@ class BalanceConfig:
     regeneration_energy_min: float = 60.0
     regeneration_hunger_min: float = 60.0
     
-    mating_energy_cost: float = 70.0
-    mating_hunger_cost: float = 60.0
+    mating_energy_cost: float = 110.0
+    mating_hunger_cost: float = 110.0
     mating_cooldown_base: int = 100
     mating_cooldown_scaling: tuple[float, float] = (0.001, 300.0)
     fertility_min: float = 0.2
     
-    sleep_energy_increase: int = 50
+    sleep_energy_increase: int = 45
     sleep_target_energy: float = 200.0
     
     hunger_scale: float = 200.0

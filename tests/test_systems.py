@@ -209,8 +209,8 @@ class TestPlantSystem:
         plant_system({e}, w)
         
         plant = e.get_component(Plant)
-        # Energy increases to 185, capped to 180, then fructify subtracts 80 -> 100
-        assert plant.energy == 100
+        # Energy increases to 185, capped to 150, then fructify subtracts 80 -> 70
+        assert plant.energy == 70
 
     def test_plant_system_fructify(self):
         e = Entity().add_component(Plant(energy=90, energy_increase=0, fructify_threshold=80, fruit_nutrition=25))

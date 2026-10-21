@@ -33,7 +33,7 @@ def genome_at(value: float) -> Genome:
 class TestDeriveBounds:
     def test_minus_one_gives_lower_bounds(self):
         t = derive(genome_at(-1.0))
-        assert t.metabolism == pytest.approx(0.01)
+        assert t.metabolism == pytest.approx(0.1)
         assert t.speed.locomotion == pytest.approx(0.0)
         assert t.speed.metabolic == pytest.approx(1.0)
         assert t.fertility == pytest.approx(0.0)
@@ -52,7 +52,7 @@ class TestDeriveBounds:
 
     def test_zero_gives_midpoints(self):
         t = derive(genome_at(0.0))
-        assert t.metabolism == pytest.approx((0.01 * 2) ** 0.5)
+        assert t.metabolism == pytest.approx((0.1 * 2) ** 0.5)
         assert t.speed.locomotion == pytest.approx(2.5)
         assert t.speed.metabolic == pytest.approx(2.0)
         assert t.fertility == pytest.approx(0.5)

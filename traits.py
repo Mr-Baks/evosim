@@ -73,7 +73,7 @@ def derive(genome: Genome) -> Traits:
     """Compute all phenotype effects from a genome."""
     gp = genome.get_phenotype
     return Traits(
-        metabolism=gp(GeneNames.METABOLISM, (0.01, 2), log=True),
+        metabolism=gp(GeneNames.METABOLISM, (0.1, 2), log=True),
         speed=Speed(
             locomotion=gp(GeneNames.SPEED, (0, 5)),
             metabolic=gp(GeneNames.SPEED, (1, 3)),

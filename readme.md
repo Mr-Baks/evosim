@@ -279,7 +279,7 @@ def _find_path(self, world, start, ignore_entity=None):
 |--------|---------------------|----------|-------------|
 | `vision_system` | `Vision` | 200 | Populates `Vision.visibles` with neighbours in radius |
 | `decision_system` | `CommandQueue`, `State` | 100 | Utility-based AI; skips entities lacking `Biochemistry`/`Vision`/`Genome` |
-| `plant_system` | `Plant` | 75 | Grows energy (cap 180) and drops fruit when above `fructify_threshold` |
+| `plant_system` | `Plant` | 75 | Grows energy (cap 150) and drops fruit when above `fructify_threshold` |
 | `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`) |
 | `command_system` | `CommandQueue` | 50 | Picks next ready command and executes the running one |
 | `logging_system` | `CommandQueue`, `State`, `Biochemistry` | 0 | Writes per-entity state and utilities to `logs/last_tick.txt` |
@@ -302,8 +302,8 @@ If the chosen action is already in `State.states`, the entity is left alone
    (`MoveToTargetCommand`, emergency 15) and eat (`EatCommand`, emergency 16);
    there is a 30% chance per tick to reconsider. If no reachable food, wander
    with `radius=6`.
-2. **sleep** – `ticks = round((200 - energy) / 50)` (or `1` if hunger is `0`),
-   `SleepCommand(energy_increase=50, emergency=10)`.
+2. **sleep** – `ticks = round((200 - energy) / 45)` (or `1` if hunger is `0`),
+   `SleepCommand(energy_increase=45, emergency=10)`.
 3. **mating** – pick the nearest visible partner, move next to it
    (`MoveToTargetCommand`, emergency 1) and mate (`MateCommand`, emergency 2).
 4. **idle** – `WanderCommand(radius=8)`; crowding raises the idle utility, so
@@ -431,8 +431,8 @@ against chronological age `t`.
 | `SleepEvent` | `source`, `energy_increase` (default 30) | `bio.energy = min(bio.energy + energy_increase, 200)` |
 | `EatEvent` | `source`, `nutrition` (default 35) | `bio.hunger = min(bio.hunger + nutrition, 200)` |
 
-> `SleepCommand` passes `energy_increase=50`, so sleeping restores more energy
-> than the event default.
+> `SleepCommand` passes `balance.sleep_energy_increase` (45 by default), so
+> sleeping restores more energy than the event default.
 
 ## Configuration (`config.py` + `main.py`)
 
@@ -443,7 +443,7 @@ by how often they change:
 |-------|---------|----------------|
 | `RunConfig` | a single run | `seed`, `ticks`, `record_every`, `output_dir`, `headless`, `tickspeed`, `fps` |
 | `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes` |
-| `BalanceConfig` | reserved "physics" (declared, **not wired into systems yet**) | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
+| `BalanceConfig` | world "physics", read by systems via `world.balance` | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
 
 Precedence: **dataclass defaults → TOML file → CLI flags**.
 
