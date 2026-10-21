@@ -81,6 +81,11 @@ class BalanceConfig:
     wander_radius: int = 8
     wander_fallback_radius: int = 6
 
+    max_crowd_count: int = 15
+    max_crowd_penalty_factor: float = 0.65
+    crowd_count_threshold: int = 3
+    crowd_radius: int = 5
+
 
 @dataclass(frozen=True)
 class RunConfig:

@@ -39,16 +39,23 @@ def biochemistry_system(entities: set[Entity], world: World):
         genome: Genome = e.get_component(Genome)
         traits = traits_for(genome)
 
+        creatures_count = world.count_near(e.x, e.y, lambda e: e.has_component(Movable), radius=world.balance.crowd_radius)
+        if creatures_count >= world.balance.crowd_count_threshold:
+            normalized = (creatures_count - world.balance.crowd_count_threshold) / (world.balance.max_crowd_count - world.balance.crowd_count_threshold)
+            crowd_penalty = min(normalized, 1.0) * world.balance.max_crowd_penalty_factor
+        else:
+            crowd_penalty = 0
+
         bio.age += 1
         bio.vitality = traits.vitality(bio.age)
         bio.max_health = traits.max_health(bio.vitality)
         if breedable:
-            breedable.fertility = traits.effective_fertility(bio.vitality)
+            breedable.fertility = traits.effective_fertility(bio.vitality) * (1 - crowd_penalty)
 
         decay = world.balance.health_decay
 
         if not queue.running or not isinstance(queue.running, SleepCommand):
-            bio.energy = max(bio.energy - traits.energy_drain(bio.vitality), 0)
+            bio.energy = max(0, bio.energy - traits.energy_drain(bio.vitality))
             if bio.energy == 0:
                 bio.health = max(bio.health - decay, 0)
 
@@ -60,9 +67,7 @@ def biochemistry_system(entities: set[Entity], world: World):
         if bio.hunger == 0:
             bio.health = max(bio.health - decay, 0)
 
-        if (bio.energy > world.balance.regeneration_energy_min
-                and bio.hunger > world.balance.regeneration_hunger_min
-                and bio.health < traits.regeneration_threshold * bio.max_health):
+        if (bio.energy > world.balance.regeneration_energy_min and bio.hunger > world.balance.regeneration_hunger_min and bio.health < traits.regeneration_threshold * bio.max_health):
             cost = traits.regeneration_cost()
             bio.health += traits.regeneration_gain(bio.vitality)
             bio.energy -= cost
