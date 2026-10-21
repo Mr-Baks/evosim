@@ -198,6 +198,19 @@ class World:
 
         return sorted(neighbours, key=lambda e: e.eid)
 
+    def count_near(self, x: int, y: int, condition: callable[Entity, bool], radius: int = 3) -> int:
+        count = 0
+
+        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
+                    nx = x + dx
+                    if 0 <= nx < self.width:
+                        for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
+                            entity = self.cells[ny][nx]
+                            if entity:
+                                count += 1 if condition(entity) else 0
+
+        return count
+
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         free_cells = []
         x, y = entity.x, entity.y
