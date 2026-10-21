@@ -44,6 +44,8 @@ class GeneNames:
     WEAR_RESISTANCE = 'wear_resistance'
     REGENERATION_THRESHOLD = 'regeneration_threshold'
     REGENERATION_INCREASE = 'regeneration_increase'
+    CROWD_PREFERENCE = 'crowd_preference'
+    PLANT_APPETENCE = 'plant_appetence'
 
 class Genome(Component):
     def __init__(self, genes: Optional[list[Gene]] = None):
@@ -78,10 +80,6 @@ class Genome(Component):
 
     def recombine(self, genome: Genome, mutation_rate: float = 0.1, strength: float = 0.3) -> Genome:
         genes = []
-        # Deterministic order: iterating a set of names depends on
-        # PYTHONHASHSEED, and since crossover consumes a shared RNG stream the
-        # order changes the offspring. Sorting makes recombination
-        # reproducible across processes and machines.
         gene_names = sorted(set(self.genes.keys()).union(set(genome.genes.keys())))
 
         for name in gene_names:

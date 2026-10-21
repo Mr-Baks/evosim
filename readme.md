@@ -318,7 +318,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `eat` | `(1 - hunger/200) · clamp(food_in_vision / 3, 0.01, 1) · hunger_drive` |
 | `sleep` | `(1 - energy/200) · sleep_drive` |
 | `mating` | `((hunger + energy)/400) · clamp(partners_in_vision / 3, 0, 1) · mating_drive · fertility` (`-1` unless energy ≥ `mating_energy_threshold`, hunger ≥ `mating_hunger_threshold` and `cooldown == 0`; `fertility` is treated as `0` below `0.2`) |
-| `idle` | `clamp(2·(1 - hunger/200), 0.2, 1) · (1 - clamp(plants_in_vision / 5, 0, 1)) · exploration_drive · clamp(creatures_in_vision / 5, 0.01, 1)` |
+| `idle` | `max(0, 0.10·exploration_drive + 0.15·crowd_density·(crowd_aversion - crowd_affinity) + 0.05·starvation·plant_absence·plant_appetence)`, where `starvation = 1 - clamp(hunger/200, 0, 1)`, `crowd_density = clamp(creatures_in_vision/5, 0, 1)`, `plant_absence = 1 - clamp(plants_in_vision/5, 0, 1)`, `crowd_aversion = max(0, -crowd_preference)`, `crowd_affinity = max(0, crowd_preference)`. The terms are deliberately small because `idle` is a fallback: larger weights make creatures wander instead of feeding and breeding |
 
 If the chosen action is already in `State.states`, the entity is left alone
 (this prevents re-issuing a command that is already running). Otherwise:
@@ -331,9 +331,10 @@ If the chosen action is already in `State.states`, the entity is left alone
    `SleepCommand(energy_increase=45, emergency=10)`.
 3. **mating** – pick the nearest visible partner, move next to it
    (`MoveToTargetCommand`, emergency 1) and mate (`MateCommand`, emergency 2).
-4. **idle** – `WanderCommand(radius=8)`; crowding raises the idle utility, so
-   dense clusters disperse and repeated local mating is damped. The hunger term
-   keeps aimless wandering low on an empty stomach.
+4. **idle** – `WanderCommand(radius=8)`; crowding raises the idle utility when
+   `crowd_aversion > 0`, so dense clusters disperse and repeated local mating is
+   damped. A starving creature with no plants nearby also wanders more, while
+   plant cover and satiety reduce the urge to move.
 
 ## Phenotype & Biochemistry (`traits.py`)
 
@@ -396,6 +397,8 @@ The base scalings are:
 | `regeneration_threshold` | `Traits.regeneration_threshold` | `(0, 1)` |
 | `regeneration_increase` | `Traits.regeneration_increase` | `(1, 5)` |
 | `hunger_drive` … `exploration_drive` | utility weights | `(0, 1)` |
+| `crowd_preference` | `Traits.crowd_preference` — negative avoids crowds (raises idle in a crowd), positive prefers them (lowers idle in a crowd) | raw `(-1, 1)` |
+| `plant_appetence` | `Traits.plant_appetence` — attraction to plant cover; wander uses `max(0, plant_appetence)` | raw `(-1, 1)` |
 | `mating_*_threshold` | minimum stat to mate | `(0, 200)` |
 | `color_r/g/b` | offspring colour | `(0, 256)` |
 

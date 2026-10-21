@@ -36,6 +36,8 @@ class Traits:
     mating_energy_threshold: float
     mating_hunger_threshold: float
     color: Color
+    crowd_preference: float
+    plant_appetence: float
 
     def wear(self, age: float) -> float:
         """Fraction of the lifespan used at age, capped at 1."""
@@ -97,6 +99,8 @@ def derive(genome: Genome) -> Traits:
             g=gp(GeneNames.COLOR_G, (0, 256)),
             b=gp(GeneNames.COLOR_B, (0, 256)),
         ),
+        crowd_preference=gp(GeneNames.CROWD_PREFERENCE, default=0.0),
+        plant_appetence=gp(GeneNames.PLANT_APPETENCE, default=0.0),
     )
 
 def traits_for(genome: Genome) -> Traits:

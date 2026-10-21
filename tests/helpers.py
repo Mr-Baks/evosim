@@ -24,6 +24,8 @@ def default_genes(**overrides) -> Genome:
         wear_resistance = 1.0   -> (180, 700) log -> 700 (slow ageing)
         regeneration_threshold = -1.0 -> (0, 1) -> 0 (regeneration disabled)
         reproduction cooldown (MateCommand scaling (0.001, 300)) = 100 + 300 = 400
+        crowd_preference = -0.5 -> aversion 0.5 (prefers open space)
+        plant_appetence = 0.5 -> attraction 0.5 (prefers plant cover)
 
     Override individual genes via keyword arguments, e.g.:
 
@@ -49,6 +51,8 @@ def default_genes(**overrides) -> Genome:
         GeneNames.WEAR_RESISTANCE: 1.0,
         GeneNames.REGENERATION_THRESHOLD: -1.0,
         GeneNames.REGENERATION_INCREASE: -1.0,
+        GeneNames.CROWD_PREFERENCE: -0.5,
+        GeneNames.PLANT_APPETENCE: 0.5,
     }
     values.update(overrides)
     return Genome([Gene(name, value, value) for name, value in values.items()])

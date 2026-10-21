@@ -372,12 +372,43 @@ class TestDecisionSystem:
 
         assert wander_utility_of(crowded) > wander_utility_of(lonely)
 
-    def test_wander_utility_drops_when_starving(self):
-        # A starving creature should be less eager to wander aimlessly.
-        fed = Entity().add_component(Biochemistry(hunger=0, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
-        starving = Entity().add_component(Biochemistry(hunger=190, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+    def test_wander_utility_drops_with_crowding_for_crowd_lover(self):
+        # CROWD_PREFERENCE is signed: a positive value means affinity, so a
+        # crowd lover is less eager to leave a crowd than an isolated one.
+        lonely = Entity().add_component(Biochemistry(hunger=50, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(crowd_preference=1.0))
+        crowded = Entity().add_component(Biochemistry(hunger=50, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(crowd_preference=1.0))
+        w = World(10, 10)
+        w.place_entity(lonely, 9, 9)
+        w.place_entity(crowded, 1, 1)
+        for (x, y) in [(1, 2), (2, 1), (2, 2), (1, 0), (0, 1)]:
+            w.place_entity(Entity().add_component(Movable()), x, y)
 
-        assert wander_utility_of(fed) > wander_utility_of(starving)
+        vision_system({lonely, crowded}, w)
+
+        assert wander_utility_of(crowded) < wander_utility_of(lonely)
+
+    def test_wander_utility_grows_when_starving(self):
+        # hunger is satiety: 0 = starving, 200 = full. A starving creature
+        # should be more eager to wander in search of food.
+        fed = Entity().add_component(Biochemistry(hunger=190, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+        starving = Entity().add_component(Biochemistry(hunger=0, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes())
+
+        assert wander_utility_of(starving) > wander_utility_of(fed)
+
+    def test_wander_utility_drops_near_plants_when_hungry(self):
+        # Plant cover should anchor a hungry creature instead of making it
+        # wander away: plant_appetence rewards staying where plants are.
+        no_plants = Entity().add_component(Biochemistry(hunger=0, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(plant_appetence=1.0))
+        near_plants = Entity().add_component(Biochemistry(hunger=0, energy=100)).add_component(Vision(radius=5)).add_component(Movable()).add_component(default_genes(plant_appetence=1.0))
+        w = World(10, 10)
+        w.place_entity(no_plants, 9, 9)
+        w.place_entity(near_plants, 1, 1)
+        for (x, y) in [(1, 2), (2, 1), (2, 2), (1, 0), (0, 1)]:
+            w.place_entity(Entity().add_component(Plant()), x, y)
+
+        vision_system({no_plants, near_plants}, w)
+
+        assert wander_utility_of(near_plants) < wander_utility_of(no_plants)
 
     def test_decision_system_skips_without_bio_or_vision(self):
         e = Entity().add_component(CommandQueue()).add_component(State()).add_component(Movable())

@@ -127,16 +127,18 @@ def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partne
     return biochemistry_factor * partner_factor * genetic_drive * fertility
 
 def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plant_count: int, balance: BalanceConfig) -> float:
+    traits = traits_for(genome)
 
-    biochemistry_factor = min(1, max(0.2, 2 * (1 - (bio.hunger / balance.hunger_scale))))
+    starvation = min(1.0, max(0.0, 1 - bio.hunger / balance.hunger_scale))
+    crowd_density = min(1.0, creatures_count / balance.creature_saturation)
+    plant_absence = 1 - min(1.0, plant_count / balance.plant_saturation)
+    crowd_aversion = max(0.0, -traits.crowd_preference)
+    crowd_affinity = max(0.0, traits.crowd_preference)
+    plant_appetence = max(0.0, traits.plant_appetence)
 
-    creatures_factor = min(1, max(creatures_count / balance.creature_saturation, 0.01))
-
-    plant_factor = 1 - min(plant_count / balance.plant_saturation, 1)
-
-    genetic_drive = traits_for(genome).exploration_drive
-
-    return biochemistry_factor * plant_factor * genetic_drive * creatures_factor
+    utility = (0.10 * traits.exploration_drive + 0.15 * crowd_density * (crowd_aversion - crowd_affinity) + 0.05 * starvation * plant_absence * plant_appetence)
+    
+    return max(0, utility)
 
 def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
     food = creatures = partners = plants = 0

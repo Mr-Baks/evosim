@@ -34,6 +34,8 @@ DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
     (GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, False),
     (GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, False),
     (GeneNames.WEAR_RESISTANCE, 0.0, 0.0, True),
+    (GeneNames.CROWD_PREFERENCE, -0.5, -0.5, True),
+    (GeneNames.PLANT_APPETENCE, 0.5, 0.5, True),
 )
 
 
