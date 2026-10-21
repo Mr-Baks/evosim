@@ -24,7 +24,7 @@ def make_creature(x, y, world: World, cfg: SimConfig, color=None):
     e = (Entity().add_component(Movable()).add_component(Biochemistry())
          .add_component(Vision(8)).add_component(CommandQueue()).add_component(State())
          .add_component(Breedable()).add_component(Render(symbol='C', color=color))
-         .add_component(Genome(genes)))
+         .add_component(Genome(genes))).add_component(Lineage())
     world.place_entity(e, x, y)
 
 def make_food(x, y, world: World, nutrition=20):

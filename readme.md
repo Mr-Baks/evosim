@@ -26,7 +26,9 @@ heredity-based genetics.
 - **Utility-based AI** – decisions pick the highest-utility action
   (eat / sleep / mate / wander) weighted by genetic drives
 - **Reproduction** – mating with a lifespan-linked cooldown, offspring recombine
-  both genomes
+  both genomes and inherit a real generation counter
+- **Lineage** – every creature carries `Lineage(generation, parents_eid)`;
+  founders start at generation `0`, children get `max(parents) + 1`
 - **Plants** – stationary energy sources that grow and drop fruit
 - **Modular & extensible** – add components, commands, genes or event handlers
   without touching the core loop
@@ -43,6 +45,7 @@ Entity
   ├── Breedable     (fertility, cooldown)
   ├── Render        (symbol, color, is_visible)
   ├── Genome        (genes)
+  ├── Lineage       (generation, parents_eid)
   └── … (Eatable, Plant, etc.)
 
 Systems registered in main.py (higher priority runs first):
@@ -185,6 +188,27 @@ genome1.recombine(genome2, mutation_rate=0.1, strength=0.3) -> Genome
 Recombination crosses every gene present in **both** parents; if the gene sets
 differ it raises `ValueError('Different genomes. …')`.
 
+### Lineage & Generations
+
+`Lineage` is a plain component added by `make_creature` and copied to every
+child by `create_child`. `MateCommand` then sets:
+
+```python
+lineage = child.get_component(Lineage)
+lineage.generation = max(parent1.generation, parent2.generation) + 1
+lineage.parents_eid = (parent2.eid, parent1.eid)
+```
+
+- Founders are generation `0` with `parents_eid is None`.
+- A child of generations `2` and `5` becomes generation `6`, never `7`.
+- Entities created without `Lineage` (e.g. hand-built test fixtures) are treated
+  as generation `0`; `create_child` always gives the child a `Lineage`.
+- `Lineage` is **not** a system requirement: `decision_system` works without it,
+  so older fixtures and non-creature entities keep working.
+
+Experiments report both the legacy `generation_est` (a births-per-capita rough
+estimate) and the real `generation_mean` / `generation_max`.
+
 ### Command Queue
 
 Each creature has a `CommandQueue` holding pending commands and one `running`
@@ -272,6 +296,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `Vision` | `radius: int`, `visibles: list[Entity]` | Perception |
 | `Plant` | `energy: int`, `energy_increase: int`, `fructify_threshold: int`, `fruit_nutrition: int` | Plant growth |
 | `Genome` | `genes: dict[str, Gene]` | Heritable genetic data |
+| `Lineage` | `generation: int`, `parents_eid: tuple[int, int] \| None` | Generation counter and parent ids (`None` for founders) |
 
 ## Systems Reference
 
@@ -540,6 +565,8 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   driving several effects), memoisation, and the physiology formulas.
 - `tests/test_systems.py` – all systems, with biochemistry expectations read from
   the same `traits.py` formulas.
+- `tests/test_lineage.py` – founders start at generation `0`, children get
+  `max(parents) + 1`, parents' eids are recorded, and lineage is deterministic.
 
 ## Current Limitations & Roadmap
 
@@ -556,8 +583,8 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - Associative memory (avoid poisonous food, remember locations)
 - Predator-prey dynamics with distinct species
 - Neural network or GOAP-based AI
-- Speciation and population statistics
-- Config file for simulation parameters
+- Speciation analysis on top of the lineage tree
+- Density-dependent population regulation
 
 ## License
 

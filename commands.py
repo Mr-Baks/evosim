@@ -398,6 +398,8 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
     components = set(parent1.components_dict.keys()) | set(parent2.components_dict.keys())
     for c in components:
         child.add_component(c())
+    if not child.has_component(Lineage):
+        child.add_component(Lineage())
     
     render = child.get_component(Render)
     render.symbol = 'C'
@@ -436,6 +438,8 @@ class MateCommand(Command):
         genome2: Genome = self.partner.get_component(Genome)
         bio1: Biochemistry = entity.get_component(Biochemistry)
         bio2: Biochemistry = self.partner.get_component(Biochemistry)
+        lineage1: Lineage = entity.get_component(Lineage)
+        lineage2: Lineage = self.partner.get_component(Lineage)
         
         child = create_child(entity, self.partner, world)
         free_cell = world.get_free_cell_near(entity)
@@ -451,6 +455,13 @@ class MateCommand(Command):
             bio1.hunger -= world.balance.mating_hunger_cost
             bio2.energy -= world.balance.mating_energy_cost
             bio2.hunger -= world.balance.mating_hunger_cost
+
+            lineage: Lineage = child.get_component(Lineage)
+            lineage.generation = max(
+                lineage1.generation if lineage1 else 0,
+                lineage2.generation if lineage2 else 0,
+            ) + 1
+            lineage.parents_eid = (self.partner.eid, entity.eid)
 
             self.complete(entity)
         else:

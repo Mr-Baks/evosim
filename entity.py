@@ -52,6 +52,12 @@ class Plant(Component):
     fructify_threshold: int = 80
     fruit_nutrition: int = 25
 
+@dataclass
+class Lineage(Component):
+    """Generation counter and parent ids (None for founders)."""
+    generation: int = 0
+    parents_eid: tuple[int, int] | None = None
+
 class Entity:
     def __init__(self, x: int = 0, y: int = 0):
         self.x = x

@@ -387,8 +387,8 @@ class TestMateCommand:
         assert cmd.is_ready(e1, w) is False
 
     def test_execute_creates_child(self):
-        e1 = Entity(x=5, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes())
-        e2 = Entity(x=6, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes())
+        e1 = Entity(x=5, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes()).add_component(Lineage(generation=2))
+        e2 = Entity(x=6, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes()).add_component(Lineage(generation=5))
         w = World(10, 10)
         w.place_entity(e1, 5, 5)
         w.place_entity(e2, 6, 5)
@@ -419,6 +419,24 @@ class TestMateCommand:
         # Child inherits a recombined genome
         assert child.has_component(Genome)
 
+        lineage = child.get_component(Lineage)
+        assert lineage.generation == 6
+        assert lineage.parents_eid == (e2.eid, e1.eid)
+
+    def test_execute_treats_missing_parent_lineage_as_zero(self):
+        e1 = Entity(x=5, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(100, 100, 100))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes()).add_component(Lineage(generation=4))
+        e2 = Entity(x=6, y=5).add_component(Breedable(cooldown=0)).add_component(Render(symbol='C', color=(200, 200, 200))).add_component(Biochemistry()).add_component(Movable()).add_component(Vision()).add_component(CommandQueue()).add_component(State()).add_component(default_genes())
+        w = World(10, 10)
+        w.place_entity(e1, 5, 5)
+        w.place_entity(e2, 6, 5)
+
+        cmd = MateCommand(partner=e2)
+        e1.get_component(CommandQueue).running = cmd
+        cmd.execute(e1, w)
+
+        child = next(e for e in w.index.get_with(Movable) if e not in (e1, e2))
+        assert child.get_component(Lineage).generation == 5
+
 
 class TestCreateChild:
     def test_create_child_combines_components(self):
@@ -443,6 +461,8 @@ class TestCreateChild:
         assert child.has_component(Vision)
         assert child.has_component(Render)
         assert child.has_component(Genome)
+        assert child.has_component(Lineage)
+        assert child.get_component(Lineage).generation == 0
         assert child.get_component(Render).symbol == 'C'
 
         # Speed and color are derived from the child's recombined genome

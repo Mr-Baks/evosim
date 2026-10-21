@@ -13,7 +13,7 @@ from config import (
     dump_config,
     load_config,
 )
-from entity import Movable, Plant
+from entity import Lineage, Movable, Plant
 from genome import GeneNames, Genome
 from world import World
 
@@ -133,6 +133,15 @@ class TestMainWiring:
 
         # Color genes derive from scenario.creature_color.
         assert genome.genes[GeneNames.COLOR_R].allele1 == (80 - 128) / 128
+
+    def test_founder_lineage_starts_at_zero(self):
+        cfg = SimConfig(scenario=ScenarioConfig(world=WorldConfig(10, 10)))
+        w = World(10, 10)
+        main.make_creature(5, 5, w, cfg)
+
+        lineage = w.get_entity(5, 5).get_component(Lineage)
+        assert lineage.generation == 0
+        assert lineage.parents_eid is None
 
     def test_build_simulation_respects_counts(self):
         cfg = SimConfig(
