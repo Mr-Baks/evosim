@@ -9,7 +9,7 @@ import random
 import heapq
 from typing import Optional
 from genome import Genome, GeneNames
-from traits import traits_for
+from traits import Traits, traits_for
 
 
 class CommandStatus(Enum):
@@ -374,22 +374,32 @@ class MoveToTargetCommand(Command):
 class WanderCommand(Command):
     radius: int = 4
 
-    def point_utility(self, x: int, y: int, entity: Entity, world: World, scan_radius: int = 3) -> float:
-        bio: Biochemistry = entity.get_component(Biochemistry)
-        genome: Genome = entity.get_component(Genome)
-        if not bio or not genome:
-            return 0.0
-
-        traits = traits_for(genome)
-
-        creatures = world.count_near(x, y, lambda e: e is not entity and e.has_component(Movable), radius=scan_radius, normed=True)
-        plants = world.count_near(x, y, lambda e: e is not entity and e.has_component(Plant), radius=scan_radius, normed=True)
-        food = world.count_near(x, y, lambda e: e is not entity and e.has_component(Eatable), radius=scan_radius, normed=True)
-        starvation = min(1.0, max(0.0, 1 - bio.hunger / world.balance.hunger_scale))
+    def _point_utility(self, x: int, y: int, entity: Entity, world: World, scan_radius: int, traits: Traits, starvation: float) -> float:
+        creatures, plants, food = world.count_components_near(x, y, (Movable, Plant, Eatable), radius=scan_radius, normed=True, exclude=entity)
 
         return creatures * traits.crowd_preference * (1 - starvation / 2) + plants * traits.plant_appetence * (1 - starvation) + food * starvation * traits.food_appetence
-    
+
+    def point_utility(self, x: int, y: int, entity: Entity, world: World, scan_radius: int = 3, traits: Traits | None = None, starvation: float | None = None) -> float:
+        if traits is None or starvation is None:
+            bio: Biochemistry = entity.get_component(Biochemistry)
+            genome: Genome = entity.get_component(Genome)
+            if not bio or not genome:
+                return 0.0
+            traits = traits_for(genome)
+            starvation = min(1.0, max(0.0, 1 - bio.hunger / world.balance.hunger_scale))
+
+        return self._point_utility(x, y, entity, world, scan_radius, traits, starvation)
+
     def execute(self, entity: Entity, world: World):
+        bio: Biochemistry = entity.get_component(Biochemistry)
+        genome: Genome = entity.get_component(Genome)
+        if bio and genome:
+            traits = traits_for(genome)
+            starvation = min(1.0, max(0.0, 1 - bio.hunger / world.balance.hunger_scale))
+        else:
+            traits = None
+            starvation = 0.0
+
         angle_bias = random.uniform(0, 2 * math.pi)
         point_utilities = {}
 
@@ -405,7 +415,10 @@ class WanderCommand(Command):
                 if not (0 <= tx < world.width and 0 <= ty < world.height):
                     tx = max(0, min(world.width - 1, entity.x + dx))
                     ty = max(0, min(world.height - 1, entity.y + dy))
-            point_utilities[(tx, ty)] = self.point_utility(tx, ty, entity, world)
+            if traits is None:
+                point_utilities[(tx, ty)] = 0.0
+            else:
+                point_utilities[(tx, ty)] = self._point_utility(tx, ty, entity, world, 3, traits, starvation)
         tx, ty = max(point_utilities, key=point_utilities.get)
 
         self.complete(entity)

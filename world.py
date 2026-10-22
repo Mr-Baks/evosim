@@ -198,20 +198,59 @@ class World:
 
         return sorted(neighbours, key=lambda e: e.eid)
 
-    def count_near(self, x: int, y: int, condition: Callable[[Entity], bool], radius: int = 3, normed: bool = False) -> int:
+    def count_near(self, x: int, y: int, condition: Callable[[Entity], bool], radius: int = 3, normed: bool = False) -> float:
         count = 0
         cells = 0
 
         for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
             nx = x + dx
             if 0 <= nx < self.width:
-                for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
+                ny_start = y + dy_lo
+                if ny_start < 0:
+                    ny_start = 0
+                ny_end = y + dy_hi + 1
+                if ny_end > self.height:
+                    ny_end = self.height
+                for ny in range(ny_start, ny_end):
                     entity = self.cells[ny][nx]
                     cells += 1
-                    if entity and condition(entity):
+                    if entity is not None and condition(entity):
                         count += 1
-                        
-        return (count / cells) if normed else count
+
+        if normed:
+            return count / cells if cells else 0
+        return count
+
+    def count_components_near(self, x: int, y: int, component_types: tuple[type[Component]], radius: int = 3, normed: bool = False, exclude: Entity | None = None) -> tuple[float]:
+        counts = [0] * len(component_types)
+        indexed_types = tuple(enumerate(component_types))
+        cells = 0
+
+        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
+            nx = x + dx
+            if 0 <= nx < self.width:
+                ny_start = y + dy_lo
+                if ny_start < 0:
+                    ny_start = 0
+                ny_end = y + dy_hi + 1
+                if ny_end > self.height:
+                    ny_end = self.height
+                for ny in range(ny_start, ny_end):
+                    cells += 1
+                    entity = self.cells[ny][nx]
+                    if entity is None or entity is exclude:
+                        continue
+                    components = entity.components
+                    for i, component_type in indexed_types:
+                        if component_type in components:
+                            counts[i] += 1
+
+        if normed:
+            if not cells:
+                return tuple(0 for _ in counts)
+            inv_cells = 1 / cells
+            return tuple(count * inv_cells for count in counts)
+        return tuple(counts)
 
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
         free_cells = []

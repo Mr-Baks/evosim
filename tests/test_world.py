@@ -348,6 +348,38 @@ class TestWorld:
         assert world.count_near(5, 5, lambda e: True, radius=2) == 1
         assert world.count_near(5, 5, lambda e: True, radius=3) == 3
 
+    def test_count_near_normed_returns_density(self):
+        world = World(10, 10)
+        entity = Entity().add_component(Movable())
+        other = Entity().add_component(Movable())
+        world.place_entity(entity, 5, 5)
+        world.place_entity(other, 5, 6)
+
+        # radius=2 covers 12 cells (the centre is excluded).
+        assert world.count_near(5, 5, lambda e: e.has_component(Movable), radius=2) == 1
+        assert world.count_near(5, 5, lambda e: e.has_component(Movable), radius=2, normed=True) == pytest.approx(1 / 12)
+
+    def test_count_components_near_counts_in_one_pass_and_can_exclude(self):
+        world = World(10, 10)
+        center = Entity().add_component(Movable())
+        excluded = Entity().add_component(Movable())
+        mover = Entity().add_component(Movable())
+        plant = Entity().add_component(Plant())
+        world.place_entity(center, 5, 5)
+        world.place_entity(excluded, 5, 6)
+        world.place_entity(mover, 5, 4)
+        world.place_entity(plant, 6, 5)
+
+        counts = world.count_components_near(
+            5, 5, (Movable, Plant), radius=2, exclude=excluded
+        )
+        assert counts == (1, 1)
+
+        normed = world.count_components_near(
+            5, 5, (Movable, Plant), radius=2, normed=True, exclude=excluded
+        )
+        assert normed == pytest.approx((1 / 12, 1 / 12))
+
     def test_get_free_cells_near(self):
         world = World(10, 10)
         center = Entity().add_component(Biochemistry())
