@@ -334,7 +334,10 @@ If the chosen action is already in `State.states`, the entity is left alone
 4. **idle** – `WanderCommand(radius=8)`; crowding raises the idle utility when
    `crowd_aversion > 0`, so dense clusters disperse and repeated local mating is
    damped. A starving creature with no plants nearby also wanders more, while
-   plant cover and satiety reduce the urge to move.
+   plant cover and satiety reduce the urge to move. `WanderCommand` samples
+   `wander_angles_count` points around the creature and picks the point with the
+   best food/plant/crowd utility; plant cover only attracts a creature when it
+   is not starving.
 
 ## Phenotype & Biochemistry (`traits.py`)
 
@@ -398,7 +401,8 @@ The base scalings are:
 | `regeneration_increase` | `Traits.regeneration_increase` | `(1, 5)` |
 | `hunger_drive` … `exploration_drive` | utility weights | `(0, 1)` |
 | `crowd_preference` | `Traits.crowd_preference` — negative avoids crowds (raises idle in a crowd), positive prefers them (lowers idle in a crowd) | raw `(-1, 1)` |
-| `plant_appetence` | `Traits.plant_appetence` — attraction to plant cover; wander uses `max(0, plant_appetence)` | raw `(-1, 1)` |
+| `plant_appetence` | `Traits.plant_appetence` — attraction to plant cover; idle uses `max(0, plant_appetence)`, point selection only while sated | raw `(-1, 1)` |
+| `food_appetence` | `Traits.food_appetence` — attraction to visible food while starving; `WanderCommand` scores candidate points by it | raw `(-1, 1)` |
 | `mating_*_threshold` | minimum stat to mate | `(0, 200)` |
 | `color_r/g/b` | offspring colour | `(0, 256)` |
 
@@ -448,7 +452,7 @@ against chronological age `t`.
 | `EatCommand` | 16 | `eat` | Consume adjacent food |
 | `SleepCommand` | 10 | `sleep` | Rest `ticks_to_sleep` ticks, emit `SleepEvent` each tick |
 | `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, and both cooldowns are set to `100 + traits.wear_resistance.cooldown` |
-| `WanderCommand` | 0 (default) | `eat`/`idle` | Random move within `radius`; pushes a `MoveToTargetCommand` |
+| `WanderCommand` | 0 (default) | `eat`/`idle` | Samples `wander_angles_count` points within `radius`, picks the best by food/plant/crowd utility, and pushes a `MoveToTargetCommand` |
 | `DeathCommand` | 100 | – | Remove entity, optionally leave a corpse, append to `logs/log.txt` |
 
 ## Events Reference

@@ -26,6 +26,7 @@ def default_genes(**overrides) -> Genome:
         reproduction cooldown (MateCommand scaling (0.001, 300)) = 100 + 300 = 400
         crowd_preference = -0.5 -> aversion 0.5 (prefers open space)
         plant_appetence = 0.5 -> attraction 0.5 (prefers plant cover)
+        food_appetence = 0.5 -> attraction 0.5 (prefers food when hungry)
 
     Override individual genes via keyword arguments, e.g.:
 
@@ -53,6 +54,7 @@ def default_genes(**overrides) -> Genome:
         GeneNames.REGENERATION_INCREASE: -1.0,
         GeneNames.CROWD_PREFERENCE: -0.5,
         GeneNames.PLANT_APPETENCE: 0.5,
+        GeneNames.FOOD_APPETENCE: 0.5,
     }
     values.update(overrides)
     return Genome([Gene(name, value, value) for name, value in values.items()])

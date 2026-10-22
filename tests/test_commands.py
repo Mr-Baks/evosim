@@ -766,6 +766,49 @@ class TestMoveToTargetPathfinding:
 
 
 class TestWanderCommand:
+    def test_point_utility_prefers_food_when_starving(self):
+        world = World(10, 10)
+        entity = (Entity()
+                  .add_component(Biochemistry(hunger=0, energy=100))
+                  .add_component(Movable())
+                  .add_component(default_genes(food_appetence=1.0, crowd_preference=0.0, plant_appetence=0.0)))
+        world.place_entity(entity, 5, 5)
+        world.place_entity(Entity().add_component(Eatable(nutrition=20)), 2, 5)
+
+        command = WanderCommand()
+
+        assert command.point_utility(3, 5, entity, world) > command.point_utility(8, 5, entity, world)
+
+    def test_point_utility_prefers_food_over_plants_when_starving(self):
+        # Plants themselves are not food. A starving creature should not stop
+        # at plant cover when a visible fruit is available.
+        world = World(10, 10)
+        entity = (Entity()
+                  .add_component(Biochemistry(hunger=0, energy=100))
+                  .add_component(Movable())
+                  .add_component(default_genes(food_appetence=1.0, plant_appetence=1.0, crowd_preference=0.0)))
+        world.place_entity(entity, 5, 5)
+        world.place_entity(Entity().add_component(Eatable(nutrition=20)), 2, 5)
+        for x, y in ((7, 4), (7, 6), (6, 5)):
+            world.place_entity(Entity().add_component(Plant()), x, y)
+
+        command = WanderCommand()
+
+        assert command.point_utility(3, 5, entity, world) > command.point_utility(7, 5, entity, world)
+
+    def test_point_utility_avoids_crowds_for_crowd_averse_creature(self):
+        world = World(10, 10)
+        entity = (Entity()
+                  .add_component(Biochemistry(hunger=0, energy=100))
+                  .add_component(Movable())
+                  .add_component(default_genes(crowd_preference=-1.0, food_appetence=0.0, plant_appetence=0.0)))
+        world.place_entity(entity, 5, 5)
+        world.place_entity(Entity().add_component(Movable()), 1, 6)
+
+        command = WanderCommand()
+
+        assert command.point_utility(1, 5, entity, world) < command.point_utility(9, 5, entity, world)
+
     def test_inverts_direction_when_target_out_of_bounds(self, monkeypatch):
         import commands
         monkeypatch.setattr(commands.random, 'uniform', lambda a, b: 0.0)  # angle 0 -> +x

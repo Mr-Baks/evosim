@@ -38,6 +38,7 @@ class Traits:
     color: Color
     crowd_preference: float
     plant_appetence: float
+    food_appetence: float
 
     def wear(self, age: float) -> float:
         """Fraction of the lifespan used at age, capped at 1."""
@@ -101,6 +102,7 @@ def derive(genome: Genome) -> Traits:
         ),
         crowd_preference=gp(GeneNames.CROWD_PREFERENCE, default=0.0),
         plant_appetence=gp(GeneNames.PLANT_APPETENCE, default=0.0),
+        food_appetence=gp(GeneNames.FOOD_APPETENCE, default=0.0),
     )
 
 def traits_for(genome: Genome) -> Traits:

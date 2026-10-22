@@ -36,6 +36,7 @@ DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
     (GeneNames.WEAR_RESISTANCE, 0.0, 0.0, True),
     (GeneNames.CROWD_PREFERENCE, -0.5, -0.5, True),
     (GeneNames.PLANT_APPETENCE, 0.5, 0.5, True),
+    (GeneNames.FOOD_APPETENCE, 0.8, 0.8, True),
 )
 
 
@@ -82,6 +83,7 @@ class BalanceConfig:
     eat_reconsider_chance: float = 0.3
     wander_radius: int = 8
     wander_fallback_radius: int = 6
+    wander_angles_count: int = 8
 
     max_crowd_count: int = 15
     max_crowd_penalty_factor: float = 0.65

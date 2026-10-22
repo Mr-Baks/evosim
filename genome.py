@@ -46,6 +46,7 @@ class GeneNames:
     REGENERATION_INCREASE = 'regeneration_increase'
     CROWD_PREFERENCE = 'crowd_preference'
     PLANT_APPETENCE = 'plant_appetence'
+    FOOD_APPETENCE = 'food_appetence'
 
 class Genome(Component):
     def __init__(self, genes: Optional[list[Gene]] = None):

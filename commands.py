@@ -373,19 +373,40 @@ class MoveToTargetCommand(Command):
 @dataclass
 class WanderCommand(Command):
     radius: int = 4
+
+    def point_utility(self, x: int, y: int, entity: Entity, world: World, scan_radius: int = 3) -> float:
+        bio: Biochemistry = entity.get_component(Biochemistry)
+        genome: Genome = entity.get_component(Genome)
+        if not bio or not genome:
+            return 0.0
+
+        traits = traits_for(genome)
+
+        creatures = world.count_near(x, y, lambda e: e is not entity and e.has_component(Movable), radius=scan_radius, normed=True)
+        plants = world.count_near(x, y, lambda e: e is not entity and e.has_component(Plant), radius=scan_radius, normed=True)
+        food = world.count_near(x, y, lambda e: e is not entity and e.has_component(Eatable), radius=scan_radius, normed=True)
+        starvation = min(1.0, max(0.0, 1 - bio.hunger / world.balance.hunger_scale))
+
+        return creatures * traits.crowd_preference * (1 - starvation / 2) + plants * traits.plant_appetence * (1 - starvation) + food * starvation * traits.food_appetence
     
     def execute(self, entity: Entity, world: World):
-        angle = random.uniform(0, 2 * math.pi)
-        dx = round(math.cos(angle) * self.radius)
-        dy = round(math.sin(angle) * self.radius)
+        angle_bias = random.uniform(0, 2 * math.pi)
+        point_utilities = {}
 
-        tx, ty = entity.x + dx, entity.y + dy
-        if not (0 <= tx < world.width and 0 <= ty < world.height):
-            dx, dy = -dx, -dy
+        for angle_mult in range(world.balance.wander_angles_count):
+            angle = 2 * math.pi * angle_mult / world.balance.wander_angles_count + angle_bias
+            dx = round(math.cos(angle) * self.radius)
+            dy = round(math.sin(angle) * self.radius)
+
             tx, ty = entity.x + dx, entity.y + dy
             if not (0 <= tx < world.width and 0 <= ty < world.height):
-                tx = max(0, min(world.width - 1, entity.x + dx))
-                ty = max(0, min(world.height - 1, entity.y + dy))
+                dx, dy = -dx, -dy
+                tx, ty = entity.x + dx, entity.y + dy
+                if not (0 <= tx < world.width and 0 <= ty < world.height):
+                    tx = max(0, min(world.width - 1, entity.x + dx))
+                    ty = max(0, min(world.height - 1, entity.y + dy))
+            point_utilities[(tx, ty)] = self.point_utility(tx, ty, entity, world)
+        tx, ty = max(point_utilities, key=point_utilities.get)
 
         self.complete(entity)
         command = MoveToTargetCommand(x=tx, y=ty, priority=self.priority, emergency=self.emergency, target_state=self.target_state)
