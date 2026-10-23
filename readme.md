@@ -21,14 +21,16 @@ heredity-based genetics.
   fertility, so old age emerges from biochemistry rather than a hard timer
 - **Genetics** – `Genome` of `Gene`s with allele dominance, phenotype scaling,
   crossover with clamped mutation, and recombination
-- **Centralised phenotype** – every gene scaling and physiology formula lives in
-  `traits.py`; systems, commands and tests read the same derived `Traits`
+- **Centralised phenotype** – the per-gene scaling ranges and physiology
+  formulas live in `traits.py`; systems, commands and tests read the same
+  derived `Traits`
 - **Utility-based AI** – decisions pick the highest-utility action
   (eat / sleep / mate / wander) weighted by genetic drives
 - **Reproduction** – mating with a lifespan-linked cooldown, offspring recombine
   both genomes and inherit a real generation counter
-- **Lineage** – every creature carries `Lineage(generation, parents_eid)`;
-  founders start at generation `0`, children get `max(parents) + 1`
+- **Lineage** – creatures created by the factories carry
+  `Lineage(generation, parents_eid)`; founders start at generation `0`, children
+  get `max(parents) + 1`
 - **Plants** – stationary energy sources that grow and drop fruit
 - **Modular & extensible** – add components, commands, genes or event handlers
   without touching the core loop
@@ -84,9 +86,11 @@ The console displays a grid:
 - `D` – corpse (food)
 - `.` – empty cell
 
-Colors indicate creature lineage (derived from the genome). The demo runs for
-1200 ticks and prints per-tick stats (population, food, average speed). The
-`logs/` directory receives text dumps; close the terminal to stop.
+Colors are rendered from `Render.color`: founders use
+`scenario.creature_color`, while offspring use
+`traits_for(child_genome).color`. The demo runs for 1200 ticks and prints
+per-tick stats (population, food, average speed). The `logs/` directory
+receives text dumps; close the terminal to stop.
 
 ## Project Structure
 
@@ -113,7 +117,8 @@ evosim/
 **Entity** – lightweight container with position `(x, y)` and a set of
 components.
 
-**Component** – pure data (dataclass). No logic.
+**Component** – mostly pure data (dataclass). A few components (for example
+`Genome`) also expose methods for heredity.
 
 ```python
 @dataclass
@@ -149,9 +154,12 @@ queued and applied by `world.flush_pending()` after all systems finish.
 **Gene** – has two alleles and a dominance flag.
 
 - Phenotype = `max(allele1, allele2)` if dominant, else `(allele1 + allele2) / 2`.
-- `crossover(gene, mutation_rate=0.05, strength=0.1)` picks each allele from one
-  of the two parents and, with probability `mutation_rate`, shifts each allele by
-  a uniform value in `[-strength, strength]`, clamped to `[-1, 1]`.
+- `crossover(gene, mutation_rate=0.05, strength=0.1)` copies `allele1` from one
+  parent's `allele1` and `allele2` from one parent's `allele2`. This is a
+  positional, **non-Mendelian** crossover: two identical heterozygotes cannot
+  produce a homozygote. The child's `dominant` flag comes from the first parent.
+  With probability `mutation_rate`, each allele is then shifted by a uniform
+  value in `[-strength, strength]`, clamped to `[-1, 1]`.
 
 ```python
 class Gene:
@@ -186,7 +194,10 @@ genome1.recombine(genome2, mutation_rate=0.1, strength=0.3) -> Genome
 ```
 
 Recombination crosses every gene present in **both** parents; if the gene sets
-differ it raises `ValueError('Different genomes. …')`.
+differ it raises `ValueError('Different genomes. …')`. `create_child` calls
+`recombine` with these defaults, so reproduction uses a **10% per-gene mutation
+rate with strength 0.3**; the `0.05` / `0.1` defaults belong to `Gene.crossover`
+and are not the values used for offspring.
 
 ### Lineage & Generations
 
@@ -206,8 +217,10 @@ lineage.parents_eid = (parent2.eid, parent1.eid)
 - `Lineage` is **not** a system requirement: `decision_system` works without it,
   so older fixtures and non-creature entities keep working.
 
-Experiments report both the legacy `generation_est` (a births-per-capita rough
-estimate) and the real `generation_mean` / `generation_max`.
+The repository does **not** include an experiment runner or built-in
+`generation_mean` / `generation_max` summaries. `Lineage.generation` is stored
+on every creature created by `make_creature` / `create_child`; an experiment
+script must collect it itself.
 
 ### Command Queue
 
@@ -265,9 +278,10 @@ systems run for the tick.
   open or crowded maps).
 - Follows the path one step per unit of `Movable.speed`, accumulating fractional
   speed in `movement_accumulator`.
-- On a blocked step the entity does **not** idle: it sidesteps into the free
-  neighbour that keeps it closest to the goal, never stepping back onto the cell
-  it just left. After **more than 7** blocked steps the command fails.
+- On a blocked step the entity tries to sidestep into the free neighbour that
+  keeps it closest to the goal, never stepping back onto the cell it just left.
+  If no such neighbour exists, it stays put and counts a failed retry. After
+  **more than 7** blocked steps the command fails.
 - Ignores the moving entity itself; treats every other entity as a wall (the
   goal cell may be occupied - that is what triggers a sidestep).
 
@@ -293,7 +307,8 @@ def _find_path(self, world, start, ignore_entity=None):
 | `Biochemistry` | `energy: float`, `hunger: float`, `health: float`, `max_health: float`, `vitality: float`, `age: float` | Vital stats + ageing |
 | `Eatable` | `nutrition: int` | Food value |
 | `Breedable` | `fertility: float`, `cooldown: int` | Reproduction (`fertility` defaults to `1`; scaled by vitality each tick) |
-| `Vision` | `radius: int`, `visibles: list[Entity]` | Perception |
+| `Vision` | `radius: int`, `visibles: list[Entity]` | Perception (`radius` defaults to `4`; `make_creature` uses `8`) |
+| `CommandQueue` | `queue: list[Command]`, `running: Command \| None` | Pending commands and the currently running command |
 | `Plant` | `energy: int`, `energy_increase: int`, `fructify_threshold: int`, `fruit_nutrition: int` | Plant growth |
 | `Genome` | `genes: dict[str, Gene]` | Heritable genetic data |
 | `Lineage` | `generation: int`, `parents_eid: tuple[int, int] \| None` | Generation counter and parent ids (`None` for founders) |
@@ -303,15 +318,18 @@ def _find_path(self, world, start, ignore_entity=None):
 | System | Required Components | Priority | Description |
 |--------|---------------------|----------|-------------|
 | `vision_system` | `Vision` | 200 | Populates `Vision.visibles` with neighbours in radius |
-| `decision_system` | `CommandQueue`, `State` | 100 | Utility-based AI; skips entities lacking `Biochemistry`/`Vision`/`Genome` |
+| `decision_system` | `CommandQueue`, `State`, `Biochemistry`, `Vision`, `Genome` | 100 | Utility-based AI; the function also skips entities lacking `Biochemistry`/`Vision`/`Genome` |
 | `plant_system` | `Plant` | 75 | Grows energy (cap 150) and drops fruit when above `fructify_threshold` |
-| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`) |
+| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`; also expects `Genome`) |
 | `command_system` | `CommandQueue` | 50 | Picks next ready command and executes the running one |
-| `logging_system` | `CommandQueue`, `State`, `Biochemistry` | 0 | Writes per-entity state and utilities to `logs/last_tick.txt` |
+| `logging_system` | `CommandQueue`, `State`, `Biochemistry`, `Vision`, `Genome` | 0 | Writes per-entity state and utilities to `logs/last_tick.txt` |
 
 ## Decision Logic (utility-based)
 
-`decision_system` computes four utilities and picks the maximum:
+`decision_system` computes four utilities and picks the maximum. The formulas
+below use the default `BalanceConfig` values: `hunger_scale` and `energy_scale`
+are `200`, `food_saturation` and `partner_saturation` are `3`, and
+`creature_saturation` and `plant_saturation` are `5`.
 
 | Action | Utility |
 |--------|---------|
@@ -324,9 +342,10 @@ If the chosen action is already in `State.states`, the entity is left alone
 (this prevents re-issuing a command that is already running). Otherwise:
 
 1. **eat** – pick the nearest visible `Eatable`, move to a free cell next to it
-   (`MoveToTargetCommand`, emergency 15) and eat (`EatCommand`, emergency 16);
-   there is a 30% chance per tick to reconsider. If no reachable food, wander
-   with `radius=6`.
+   (`MoveToTargetCommand`, emergency 15) and eat (`EatCommand`, emergency 16).
+   Each candidate is skipped with probability `eat_reconsider_chance` (`0.3`).
+   If no candidate is accepted or no free cell exists, wander with
+   `wander_fallback_radius` (`6`).
 2. **sleep** – `ticks = round((200 - energy) / 45)` (or `1` if hunger is `0`),
    `SleepCommand(energy_increase=45, emergency=10)`.
 3. **mating** – pick the nearest visible partner, move next to it
@@ -341,10 +360,14 @@ If the chosen action is already in `State.states`, the entity is left alone
 
 ## Phenotype & Biochemistry (`traits.py`)
 
-Every gene scaling and every physiological formula lives in **one place**,
-`traits.py`. `traits_for(genome)` derives a frozen `Traits` object once per
-genome and memoises it on the genome itself (a genome is immutable after birth,
-so the result is constant for the entity's whole life).
+The per-gene scaling ranges and every physiological formula live in **one
+place**, `traits.py` (the generic linear/log mapping itself is
+`Genome.get_phenotype`). `traits_for(genome)` derives a frozen `Traits` object
+once per genome and memoises it on the genome itself. The simulation treats a
+genome as immutable after birth, so the result is constant for the entity's
+whole life. `Genome.add_gene` / `remove_gene` exist, but they do **not**
+invalidate the cached `_traits`; derive traits only after the genome is final,
+or clear the cache yourself.
 
 Scaling and formulas are grouped by gene, which makes **pleiotropy** explicit:
 `speed` becomes both `traits.speed.locomotion` (body speed) and
@@ -392,7 +415,7 @@ The base scalings are:
 
 | Gene | Effect | Scale |
 |------|--------|-------|
-| `metabolism` | `Traits.metabolism` — multiplier in drain and regeneration cost | `(0.01, 2)`, log |
+| `metabolism` | `Traits.metabolism` — multiplier in drain and regeneration cost | `(0.1, 2)`, log |
 | `speed` | `Traits.speed.locomotion` / `Traits.speed.metabolic` | `(0, 5)` / `(1, 3)` |
 | `fertility` | `Traits.fertility` | `(0, 1)` |
 | `senescence_shape` | `Traits.senescence_shape` | `(1, 3)` |
@@ -425,7 +448,7 @@ controls a separate property:
 - `wear_resistance` is the characteristic lifespan `L` (scale). Wear is the
   normalised age `age / L`, capped at `1`.
 - `senescence_shape` is the Weibull exponent `a` (shape). Damage is
-  `wear ** a`, so `a = 1` is linear (no senescence), `a > 1` accelerates late
+  `wear ** a`, so `a = 1` gives linear senescence, `a > 1` accelerates late
   in life, and vitality is `1 - damage`.
 - `vitality` drives `max_health`, regeneration strength and fertility, so
   ageing is felt through several channels instead of a death flag.
@@ -436,8 +459,9 @@ controls a separate property:
 
 Death is not scheduled: as `age` approaches `L`, vitality → 0, `max_health` → 0,
 `health` is clamped to 0 and the normal `DeathCommand` path fires (leaving a
-corpse). With the default grid you can therefore plot survivorship `l(t)`
-against chronological age `t`.
+corpse). `DeathCommand` logs only position, hunger and energy, not age, so an
+experiment that needs survivorship `l(t)` must record `Biochemistry.age` at
+death itself.
 
 > Trade-off note: `(1 - senescence_shape / 3)` gives a maximum-shape creature
 > zero fertility, linking longevity to reproduction. Without such a cost,
@@ -451,7 +475,7 @@ against chronological age `t`.
 | `MoveToTargetCommand` | 15 (to food), 1 (to partner), inherits `WanderCommand`'s otherwise | `eat`/`mating`/`idle` | A\* pathfinding to `(x, y)` |
 | `EatCommand` | 16 | `eat` | Consume adjacent food |
 | `SleepCommand` | 10 | `sleep` | Rest `ticks_to_sleep` ticks, emit `SleepEvent` each tick |
-| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, and both cooldowns are set to `100 + traits.wear_resistance.cooldown` |
+| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, and both cooldowns are set to `world.balance.mating_cooldown_base + traits.wear_resistance.cooldown` (default base `100`) |
 | `WanderCommand` | 0 (default) | `eat`/`idle` | Samples `wander_angles_count` points within `radius`, picks the best by food/plant/crowd utility, and pushes a `MoveToTargetCommand` |
 | `DeathCommand` | 100 | – | Remove entity, optionally leave a corpse, append to `logs/log.txt` |
 
@@ -473,11 +497,14 @@ by how often they change:
 
 | Layer | Purpose | Example fields |
 |-------|---------|----------------|
-| `RunConfig` | a single run | `seed`, `ticks`, `record_every`, `output_dir`, `headless`, `tickspeed`, `fps` |
+| `RunConfig` | a single run | `seed`, `ticks`, `headless`, `tickspeed`, `fps`; `record_every` and `output_dir` are defined but not used by the current runner |
 | `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes` |
 | `BalanceConfig` | world "physics", read by systems via `world.balance` | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
 
-Precedence: **dataclass defaults → TOML file → CLI flags**.
+Precedence: **dataclass defaults → TOML file → CLI flags**. The CLI currently
+overrides only `RunConfig` fields (`seed`, `ticks`, `record_every`, `output_dir`,
+`tickspeed`, `fps`, `headless`); scenario and balance values come from the TOML
+file.
 
 ```python
 from config import load_config, SimConfig
@@ -489,14 +516,19 @@ cfg.scenario.founder_genes   # ((name, allele1, allele2, dominant), ...)
 
 ```bash
 python main.py --seed 7 --ticks 2000 --headless
-python main.py --config scenario.toml --output-dir results/run1
+python main.py --config scenario.toml
 ```
+
+`--output-dir` and `--record-every` are accepted for compatibility but are not
+consumed by the current runner; experiment output must be written by your own
+code.
 
 `main.build_simulation(cfg)` assembles the world from `cfg` without stepping.
 `main.main(cfg)` seeds the RNG from `cfg.run.seed`, then either runs the
 interactive loop (`sim.run`) or `run_headless` (no rendering, no wall-clock
 pacing). Importing `main` has no side effects. `dump_config(cfg, path)` writes
-the effective config next to results for reproducibility.
+the effective config to a chosen path for reproducibility; `main` does not call
+it automatically.
 
 ### System registration in `build_simulation`
 
@@ -505,7 +537,7 @@ sim = Simulation(cfg.run.tickspeed, cfg.run.fps, cfg.scenario.world.size)
 
 # logging/printing run only in interactive mode, skipped when headless
 if not cfg.run.headless:
-    sim.register_system(frozenset([CommandQueue, State, Biochemistry]), logging_system, priority=0)
+    sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome]), logging_system, priority=0)
     sim.add_on_tick(tick_stats)
 
 # System registration order matters (higher priority runs first)
@@ -513,17 +545,25 @@ sim.register_system(frozenset([CommandQueue]), command_system, priority=50)
 sim.register_system(frozenset([Vision]), vision_system, priority=200)
 sim.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
 sim.register_system(frozenset([Plant]), plant_system, priority=75)
-sim.register_system(frozenset([CommandQueue, State]), decision_system, priority=100)
+sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome]), decision_system, priority=100)
 ```
 
 ### Founder genome
 
 The founder is `scenario.founder_genes`, a tuple of
 `(name, allele1, allele2, dominant)` — an exact, configurable reproduction of
-the genome that used to be hard-coded in `make_creature`. Color genes are
-derived from `scenario.creature_color`. `make_food()` spawns a standalone
-`Eatable`; `make_plant()` spawns a `Plant` with a random `fructify_threshold`
-in `[plant_fructify_min, plant_fructify_max]`.
+the genome that used to be hard-coded in `make_creature`. Three color genes are
+appended after `founder_genes`, derived from `scenario.creature_color`; because
+they are non-dominant and one allele is fixed at `-1`, the derived colour is
+currently exactly half the requested `creature_color`. Founders'
+`Render.color` is set directly to `creature_color`; offspring use the derived
+traits. `make_food()` spawns a standalone `Eatable`; `make_plant()` spawns a
+`Plant` with a random `fructify_threshold` in
+`[plant_fructify_min, plant_fructify_max]`.
+`make_creature()`, `make_food()`, and `make_plant()` place the new entity in
+the world and return `None`; use `world.get_entity(x, y)` if you need it.
+`_scatter` skips occupied cells without retrying, so the actual initial counts
+can be slightly below `initial_plants` / `initial_creatures`.
 
 ## Extending the Simulation
 
@@ -538,6 +578,8 @@ in `[plant_fructify_min, plant_fructify_max]`.
 1. Create a `@dataclass` inheriting from `Component`.
 2. Add it to entities via `entity.add_component(...)` (before indexing) or
    `world.add_component(entity, ...)` (at runtime, while systems run).
+   Components that should be inherited by offspring must have a no-argument
+   constructor: `create_child` clones parent components with `c()`.
 3. Create a system processing entities with that component.
 4. Register it via `simulation.register_system(frozenset([NewComponent]), system, priority)`.
 
@@ -547,6 +589,9 @@ in `[plant_fructify_min, plant_fructify_max]`.
 2. Add it to the creature factory in `main.py` with the desired alleles.
 3. Add its scaling and effect to `traits.py` (a new `Traits` field or method)
    and read it through `traits_for(genome)` in the relevant system or utility.
+   `derive()` assumes every core gene is present; if a gene is missing,
+   `get_phenotype` returns its default (often `None`), which usually breaks the
+   physiology formulas. Keep `founder_genes` complete.
 
 ### Add a New Event
 
@@ -583,7 +628,18 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - **No speciation** – a single gene pool.
 - **Logging** – appends death/mating lines to `logs/log.txt`, command failures
   to `logs/error_log.txt`, and a per-tick snapshot to `logs/last_tick.txt`. The
-  `logs/` directory must exist (a `.gitkeep` is committed).
+  `logs/` directory must exist (a `.gitkeep` is committed). `DeathCommand` and
+  `create_child` write unconditionally; there is no event-log switch yet.
+- **No experiment runner** – `record_every` / `output_dir` are declared but
+  unused, and there is no built-in trait/behaviour CSV export or generation
+  summary.
+- **Founder variation** – all founders share the same `founder_genes`; there is
+  no standing genetic variation unless you customise `make_creature`.
+- **Offspring vision** – `create_child` instantiates `Vision()` with its default
+  `radius=4`, while `make_creature` gives founders `Vision(8)`.
+- **Crossover** – positional and non-Mendelian (see *Genome & Genetics*).
+- **Config** – `mating_cooldown_scaling` is defined but unused; the cooldown
+  scaling is hard-coded in `traits.py`.
 
 **Planned:**
 
@@ -591,7 +647,8 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - Predator-prey dynamics with distinct species
 - Neural network or GOAP-based AI
 - Speciation analysis on top of the lineage tree
-- Density-dependent population regulation
+- Explicit density-dependent mortality (crowding currently affects fertility and
+  movement, not direct mortality)
 
 ## License
 
