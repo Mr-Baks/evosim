@@ -14,38 +14,65 @@ class TestGene:
         assert g.name == 'speed'
         assert g.allele1 == 0.2
         assert g.allele2 == -0.4
-        assert g.dominant is True
+        assert g.dominance == 1
 
-    def test_phenotype_dominant_is_max(self):
+    def test_phenotype_dominance_one_is_max(self):
         assert Gene('x', 0.2, 0.8).phenotype == pytest.approx(0.8)
         assert Gene('x', -0.9, -0.3).phenotype == pytest.approx(-0.3)
 
-    def test_phenotype_recessive_is_mean(self):
-        assert Gene('x', 0.2, 0.8, dominant=False).phenotype == pytest.approx(0.5)
-        assert Gene('x', -1.0, 1.0, dominant=False).phenotype == pytest.approx(0.0)
+    def test_phenotype_dominance_half_is_mean(self):
+        assert Gene('x', 0.2, 0.8, dominance=0.5).phenotype == pytest.approx(0.5)
+        assert Gene('x', -1.0, 1.0, dominance=0.5).phenotype == pytest.approx(0.0)
 
-    def test_crossover_takes_alleles_from_partner_when_roll_high(self, monkeypatch):
+    def test_phenotype_dominance_zero_is_min(self):
+        assert Gene('x', 0.2, 0.8, dominance=0).phenotype == pytest.approx(0.2)
+        assert Gene('x', -0.9, -0.3, dominance=0).phenotype == pytest.approx(-0.9)
+
+    def test_crossover_takes_one_allele_from_each_parent(self, monkeypatch):
         g1 = Gene('x', 1.0, 1.0)
         g2 = Gene('x', -1.0, -1.0)
-        # random.random is used for: a1 choice, a2 choice, mutation roll.
-        # 0.9 >= 0.5 -> take partner allele; 0.9 >= mutation_rate -> no mutation.
+        # random.random is used for: a1 choice, a2 choice, two mutation rolls.
+        # 0.9 >= 0.5 -> take the second allele of each parent;
+        # 0.9 >= mutation_rate -> no mutation.
         monkeypatch.setattr(random, 'random', lambda: 0.9)
         child = g1.crossover(g2, mutation_rate=0.05)
-        assert child.allele1 == -1.0
+        assert child.allele1 == 1.0
         assert child.allele2 == -1.0
         assert child.name == 'x'
 
-    def test_crossover_keeps_self_alleles_when_roll_low(self, monkeypatch):
+    def test_crossover_uses_first_allele_when_roll_low(self, monkeypatch):
         g1 = Gene('x', 1.0, 0.5)
         g2 = Gene('x', -1.0, -0.5)
         monkeypatch.setattr(random, 'random', lambda: 0.0)
         child = g1.crossover(g2, mutation_rate=0.0)
         assert child.allele1 == 1.0
-        assert child.allele2 == 0.5
+        assert child.allele2 == -1.0
 
-    def test_crossover_inherits_dominance(self):
-        child = Gene('x', 0.1, 0.1, dominant=False).crossover(Gene('x', 0.2, 0.2))
-        assert child.dominant is False
+    def test_crossover_segregates_like_mendel(self):
+        # Aa x Aa should give roughly 1 AA : 2 Aa : 1 aa.
+        parent1 = Gene('x', 1.0, -1.0)
+        parent2 = Gene('x', 1.0, -1.0)
+        random.seed(12345)
+        counts = {'AA': 0, 'Aa': 0, 'aa': 0}
+        trials = 4000
+        for _ in range(trials):
+            child = parent1.crossover(parent2, mutation_rate=0.0)
+            high, low = sorted((child.allele1, child.allele2), reverse=True)
+            key = ('A' if high == 1.0 else 'a') + ('A' if low == 1.0 else 'a')
+            counts[key] += 1
+        assert counts['AA'] / trials == pytest.approx(0.25, abs=0.04)
+        assert counts['Aa'] / trials == pytest.approx(0.50, abs=0.04)
+        assert counts['aa'] / trials == pytest.approx(0.25, abs=0.04)
+
+    def test_crossover_keeps_dominance(self):
+        child = Gene('x', 0.1, 0.1, dominance=0.5).crossover(
+            Gene('x', 0.2, 0.2, dominance=0.5))
+        assert child.dominance == 0.5
+
+    def test_crossover_rejects_different_dominance(self):
+        with pytest.raises(ValueError, match='locus-level constant'):
+            Gene('x', 0.1, 0.1, dominance=0.5).crossover(
+                Gene('x', 0.2, 0.2, dominance=1.0), mutation_rate=0.0)
 
     def test_crossover_positive_mutation_is_clamped(self, monkeypatch):
         g = Gene('x', 1.0, 1.0)
@@ -192,7 +219,7 @@ class TestRecombine:
         def parent(shift):
             return Genome([
                 Gene(name, self._SPECS[name][0] + shift, self._SPECS[name][1] + shift,
-                     dominant=False)
+                     dominance=0.5)
                 for name in gene_order
             ])
 
@@ -218,7 +245,7 @@ class TestRecombine:
             "from genome import Gene, Genome\n"
             "specs = [('a', -0.3, 0.7), ('b', 0.2, -0.4), ('c', 0.1, 0.9),\n"
             "         ('d', -0.5, 0.5), ('e', 0.3, -0.2), ('f', -0.8, 0.6)]\n"
-            "mk = lambda s: Genome([Gene(n, a + s, b + s, dominant=False) for n, a, b in specs])\n"
+            "mk = lambda s: Genome([Gene(n, a + s, b + s, dominance=0.5) for n, a, b in specs])\n"
             "random.seed(42)\n"
             "child = mk(0.0).recombine(mk(0.05))\n"
             "print(json.dumps(sorted((g.name, round(g.allele1, 9), round(g.allele2, 9))\n"

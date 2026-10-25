@@ -1,7 +1,7 @@
-"""Interactive entry point: build the default world from ``SimConfig`` and run it.
+"""Interactive entry point: build the default world from SimConfig and run it.
 
 Running this module directly starts the TUI simulation. Importing it has no
-side effects, so experiment runners and tests can reuse ``build_simulation``.
+side effects, so experiment runners and tests can reuse build_simulation.
 """
 import random
 from commands import *
@@ -16,10 +16,10 @@ from world import World
 def make_creature(x, y, world: World, cfg: SimConfig, color=None):
     color = color or cfg.scenario.creature_color
 
-    genes = [Gene(name, a1, a2, dominant=dom) for name, a1, a2, dom in cfg.scenario.founder_genes]
-    genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, -1, dominant=False))
-    genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, -1, dominant=False))
-    genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, -1, dominant=False))
+    genes = [Gene(name, a1, a2, dominance=dom) for name, a1, a2, dom in cfg.scenario.founder_genes]
+    genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, (color[0] - 128) / 128, dominance=0.5))
+    genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, (color[1] - 128) / 128, dominance=0.5))
+    genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, (color[2] - 128) / 128, dominance=0.5))
 
     e = (Entity().add_component(Movable()).add_component(Biochemistry())
          .add_component(Vision(8)).add_component(CommandQueue()).add_component(State())

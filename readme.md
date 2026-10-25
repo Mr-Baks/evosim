@@ -19,8 +19,9 @@ heredity-based genetics.
   starvation and death (leaving a corpse)
 - **Senescence** – accumulated wear with age lowers vitality, max health and
   fertility, so old age emerges from biochemistry rather than a hard timer
-- **Genetics** – `Genome` of `Gene`s with allele dominance, phenotype scaling,
-  crossover with clamped mutation, and recombination
+- **Genetics** – `Genome` of `Gene`s with a quantitative dominance weight,
+  phenotype scaling, Mendelian segregation with clamped per-allele mutation,
+  and recombination
 - **Centralised phenotype** – the per-gene scaling ranges and physiology
   formulas live in `traits.py`; systems, commands and tests read the same
   derived `Traits`
@@ -151,23 +152,37 @@ queued and applied by `world.flush_pending()` after all systems finish.
 
 ### Genome & Genetics
 
-**Gene** – has two alleles and a dominance flag.
+**Gene** – has two alleles and a quantitative dominance weight `w` in `[0, 1]`
+(default `1`).
 
-- Phenotype = `max(allele1, allele2)` if dominant, else `(allele1 + allele2) / 2`.
-- `crossover(gene, mutation_rate=0.05, strength=0.1)` copies `allele1` from one
-  parent's `allele1` and `allele2` from one parent's `allele2`. This is a
-  positional, **non-Mendelian** crossover: two identical heterozygotes cannot
-  produce a homozygote. The child's `dominant` flag comes from the first parent.
-  With probability `mutation_rate`, each allele is then shifted by a uniform
-  value in `[-strength, strength]`, clamped to `[-1, 1]`.
+- Phenotype = `w * max(a1, a2) + (1 - w) * min(a1, a2)`.
+  `w = 0.5` is additive (the mean), `w = 1` makes the larger allele completely
+  dominant, and `w = 0` makes the smaller allele completely dominant. This is a
+  simplified **directional weight**, not the standard quantitative-genetics
+  coefficient `h` (`h = 2w - 1`; `h = 0` additive, `h = 1` or `-1` complete
+  dominance of the larger/smaller allele).
+- `crossover(gene, mutation_rate=0.05, strength=0.1)` performs Mendelian
+  segregation: `allele1` is drawn from the two alleles of `self`, and `allele2`
+  from the two alleles of the partner. With probability `mutation_rate`, each
+  allele is independently shifted by a uniform value in
+  `[-strength, strength]`, clamped to `[-1, 1]`. Both parents must use the same
+  dominance weight for the locus; otherwise `ValueError` is raised. The child
+  inherits that weight unchanged.
 
 ```python
 class Gene:
-    def __init__(self, name: str, allele1: float, allele2: float, dominant: bool = True): ...
+    def __init__(self, name: str, allele1: float, allele2: float,
+                 dominance: float = 1): ...
     @property
     def phenotype(self) -> float: ...
     def crossover(self, gene, mutation_rate=0.05, strength=0.1) -> Gene: ...
 ```
+
+`dominance` is a property of the locus, not a blending trait. All individuals
+currently share the same weight for a given gene, and `crossover` rejects
+parents that disagree. In the old boolean API, `dominant=True` maps to
+`dominance=1` and `dominant=False` maps to `dominance=0.5`; a TOML value
+`false` is **not** auto-converted, so write `0.5` explicitly.
 
 **GeneNames** – predefined genes, raw alleles in `[-1, 1]`. Their scalings and
 physiological effects are centralised in `traits.py` (see *Phenotype &
@@ -195,8 +210,9 @@ genome1.recombine(genome2, mutation_rate=0.1, strength=0.3) -> Genome
 
 Recombination crosses every gene present in **both** parents; if the gene sets
 differ it raises `ValueError('Different genomes. …')`. `create_child` calls
-`recombine` with these defaults, so reproduction uses a **10% per-gene mutation
-rate with strength 0.3**; the `0.05` / `0.1` defaults belong to `Gene.crossover`
+`recombine` with these defaults, so reproduction uses a **10% per-allele
+mutation rate with strength 0.3** (about a 19% chance that at least one of the
+two alleles mutates); the `0.05` / `0.1` defaults belong to `Gene.crossover`
 and are not the values used for offspring.
 
 ### Lineage & Generations
@@ -511,7 +527,7 @@ from config import load_config, SimConfig
 cfg = load_config("scenario.toml")   # or load_config() for defaults
 cfg.run.seed                 # 1
 cfg.scenario.world.size      # (100, 40)
-cfg.scenario.founder_genes   # ((name, allele1, allele2, dominant), ...)
+cfg.scenario.founder_genes   # ((name, allele1, allele2, dominance), ...)
 ```
 
 ```bash
@@ -551,15 +567,16 @@ sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome
 ### Founder genome
 
 The founder is `scenario.founder_genes`, a tuple of
-`(name, allele1, allele2, dominant)` — an exact, configurable reproduction of
-the genome that used to be hard-coded in `make_creature`. Three color genes are
-appended after `founder_genes`, derived from `scenario.creature_color`; because
-they are non-dominant and one allele is fixed at `-1`, the derived colour is
-currently exactly half the requested `creature_color`. Founders'
-`Render.color` is set directly to `creature_color`; offspring use the derived
-traits. `make_food()` spawns a standalone `Eatable`; `make_plant()` spawns a
-`Plant` with a random `fructify_threshold` in
-`[plant_fructify_min, plant_fructify_max]`.
+`(name, allele1, allele2, dominance)` — an exact, configurable reproduction of
+the genome that used to be hard-coded in `make_creature`. `dominance` is the
+weight described above (`0.5` additive, `1` complete dominance of the larger
+allele); all founders use the same weight for a given gene. Three color genes
+are appended after `founder_genes`, derived from `scenario.creature_color`;
+both alleles are set to the target value, so the derived colour matches the
+requested colour. Founders' `Render.color` is also set directly to
+`creature_color`; offspring use the derived traits. `make_food()` spawns a
+standalone `Eatable`; `make_plant()` spawns a `Plant` with a random
+`fructify_threshold` in `[plant_fructify_min, plant_fructify_max]`.
 `make_creature()`, `make_food()`, and `make_plant()` place the new entity in
 the world and return `None`; use `world.get_entity(x, y)` if you need it.
 `_scatter` skips occupied cells without retrying, so the actual initial counts
@@ -608,8 +625,9 @@ python -m pytest tests/ -v
 The suite is deterministic and runs each test in a throwaway working directory
 that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 
-- `tests/test_genome.py` – phenotype, dominance, crossover/mutation, and both
-  the linear and **logarithmic** `get_phenotype` scalings.
+- `tests/test_genome.py` – phenotype weights, Mendelian segregation, per-allele
+  mutation, dominance mismatch, and both the linear and **logarithmic**
+  `get_phenotype` scalings.
 - `tests/test_aging.py` – the senescence model: age accumulation, wear/vitality
   curves, `max_health` scaling, emergent end-of-life death, and reproductive
   senescence.
@@ -637,7 +655,10 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   no standing genetic variation unless you customise `make_creature`.
 - **Offspring vision** – `create_child` instantiates `Vision()` with its default
   `radius=4`, while `make_creature` gives founders `Vision(8)`.
-- **Crossover** – positional and non-Mendelian (see *Genome & Genetics*).
+- **Dominance model** – one directional weight per gene; it is not
+  allele-specific, cannot represent over/underdominance, and is not the
+  standard `h` coefficient. Old TOML configs that used `true` / `false` must be
+  rewritten as `1` / `0.5`.
 - **Config** – `mating_cooldown_scaling` is defined but unused; the cooldown
   scaling is hard-coded in `traits.py`.
 

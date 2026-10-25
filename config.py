@@ -18,25 +18,25 @@ class WorldConfig:
         return (self.width, self.height)
 
 
-FounderGene = tuple[str, float, float, bool]
+FounderGene = tuple[str, float, float, float]
 
-DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
-    (GeneNames.SPEED, -0.6, -0.6, False),
-    (GeneNames.HUNGER_DRIVE, 0.5, 0.5, True),
-    (GeneNames.SLEEP_DRIVE, 0.5, 0.5, True),
-    (GeneNames.EXPLORATION_DRIVE, 0.5, 0.5, True),
-    (GeneNames.METABOLISM, -0.8, -0.7, False),
-    (GeneNames.MATING_DRIVE, 1.0, 1.0, True),
-    (GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2, True),
-    (GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2, True),
-    (GeneNames.FERTILITY, 0.5, 0.5, True),
-    (GeneNames.REGENERATION_INCREASE, 0.1, 0.1, True),
-    (GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, False),
-    (GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, False),
-    (GeneNames.WEAR_RESISTANCE, 0.0, 0.0, True),
-    (GeneNames.CROWD_PREFERENCE, -0.5, -0.5, True),
-    (GeneNames.PLANT_APPETENCE, 0.5, 0.5, True),
-    (GeneNames.FOOD_APPETENCE, 0.8, 0.8, True),
+DEFAULT_FOUNDER_GENES: tuple[FounderGene] = (
+    (GeneNames.SPEED, -0.6, -0.6, 0.5),
+    (GeneNames.HUNGER_DRIVE, 0.5, 0.5, 1),
+    (GeneNames.SLEEP_DRIVE, 0.5, 0.5, 1),
+    (GeneNames.EXPLORATION_DRIVE, 0.5, 0.5, 1),
+    (GeneNames.METABOLISM, -0.8, -0.7, 0.5),
+    (GeneNames.MATING_DRIVE, 1.0, 1.0, 1),
+    (GeneNames.MATING_ENERGY_THRESHOLD, -0.2, -0.2, 1),
+    (GeneNames.MATING_HUNGER_THRESHOLD, -0.2, -0.2, 1),
+    (GeneNames.FERTILITY, 0.5, 0.5, 0.5),
+    (GeneNames.REGENERATION_INCREASE, 0.1, 0.1, 1),
+    (GeneNames.REGENERATION_THRESHOLD, -0.2, 0.5, 0.5),
+    (GeneNames.SENESCENCE_SHAPE, -0.5, -0.3, 0.5),
+    (GeneNames.WEAR_RESISTANCE, 0.0, 0.0, 1),
+    (GeneNames.CROWD_PREFERENCE, -0.5, -0.5, 1),
+    (GeneNames.PLANT_APPETENCE, 0.5, 0.5, 1),
+    (GeneNames.FOOD_APPETENCE, 0.8, 0.8, 1),
 )
 
 

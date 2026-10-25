@@ -15,6 +15,7 @@ from config import (
 )
 from entity import Lineage, Movable, Plant
 from genome import GeneNames, Genome
+from traits import traits_for
 from world import World
 
 
@@ -41,7 +42,7 @@ class TestDefaults:
 
     def test_default_founder_has_low_metabolism(self):
         genes = {gene[0]: gene for gene in DEFAULT_FOUNDER_GENES}
-        assert genes[GeneNames.METABOLISM] == (GeneNames.METABOLISM, -0.8, -0.7, False)
+        assert genes[GeneNames.METABOLISM] == (GeneNames.METABOLISM, -0.8, -0.7, 0.5)
 
 
 class TestFromDict:
@@ -54,7 +55,7 @@ class TestFromDict:
                 "initial_plants": 10,
                 "initial_creatures": 4,
                 "creature_color": [1, 2, 3],
-                "founder_genes": [["speed", -0.4, -0.4, False]],
+                "founder_genes": [["speed", -0.4, -0.4, 0.5]],
             },
             "balance": {"corpse_nutrition": 0},
         })
@@ -62,7 +63,7 @@ class TestFromDict:
         assert cfg.scenario.name == "sparse"
         assert cfg.scenario.world.size == (30, 20)
         assert cfg.scenario.creature_color == (1, 2, 3)
-        assert cfg.scenario.founder_genes == (("speed", -0.4, -0.4, False),)
+        assert cfg.scenario.founder_genes == (("speed", -0.4, -0.4, 0.5),)
         assert cfg.balance.corpse_nutrition == 0
 
     def test_partial_dict_keeps_defaults(self):
@@ -127,12 +128,21 @@ class TestMainWiring:
         main.make_creature(5, 5, w, cfg)
         genome = w.get_entity(5, 5).get_component(Genome)
 
-        for name, a1, a2, dominant in DEFAULT_FOUNDER_GENES:
+        for name, a1, a2, dominance in DEFAULT_FOUNDER_GENES:
             gene = genome.genes[name]
-            assert (gene.allele1, gene.allele2, gene.dominant) == (a1, a2, dominant)
+            assert (gene.allele1, gene.allele2, gene.dominance) == (a1, a2, dominance)
 
         # Color genes derive from scenario.creature_color.
         assert genome.genes[GeneNames.COLOR_R].allele1 == (80 - 128) / 128
+        assert genome.genes[GeneNames.COLOR_R].allele2 == (80 - 128) / 128
+
+    def test_founder_color_matches_scenario(self):
+        cfg = SimConfig(scenario=ScenarioConfig(world=WorldConfig(10, 10)))
+        w = World(10, 10)
+        main.make_creature(5, 5, w, cfg)
+        genome = w.get_entity(5, 5).get_component(Genome)
+        color = traits_for(genome).color
+        assert (color.r, color.g, color.b) == pytest.approx(cfg.scenario.creature_color)
 
     def test_founder_lineage_starts_at_zero(self):
         cfg = SimConfig(scenario=ScenarioConfig(world=WorldConfig(10, 10)))

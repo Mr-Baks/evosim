@@ -4,28 +4,31 @@ from entity import Component
 
 
 class Gene:
-    def __init__(self, name: str, allele1: float, allele2: float, dominant: bool = True):
+    def __init__(self, name: str, allele1: float, allele2: float, dominance: float = 1):
         self.name = name
         self.allele1 = allele1
         self.allele2 = allele2
-        self.dominant = dominant
+        self.dominance = dominance
 
     @property
     def phenotype(self) -> float:
-        if self.dominant:
-            return max(self.allele1, self.allele2)
-        else: 
-            return (self.allele1 + self.allele2) / 2
+        a_min, a_max = sorted((self.allele1, self.allele2))
+        return a_max * self.dominance + a_min * (1 - self.dominance)
 
     def crossover(self, gene: Gene, mutation_rate: float = 0.05, strength: float = 0.1) -> Gene:
-        a1 = self.allele1 if random.random() < 0.5 else gene.allele1
-        a2 = self.allele2 if random.random() < 0.5 else gene.allele2
+        a1 = self.allele1 if random.random() < 0.5 else self.allele2
+        a2 = gene.allele1 if random.random() < 0.5 else gene.allele2
 
         if random.random() < mutation_rate:
             a1 = max(-1, min(1, a1 + random.uniform(-strength, strength)))
+
+        if random.random() < mutation_rate:
             a2 = max(-1, min(1, a2 + random.uniform(-strength, strength)))
 
-        return Gene(self.name, a1, a2, self.dominant)
+        if self.dominance != gene.dominance:
+            raise ValueError("Dominance must be a locus-level constant")
+
+        return Gene(self.name, a1, a2, self.dominance)
 
 class GeneNames:
     SPEED = 'speed'
