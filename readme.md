@@ -10,8 +10,8 @@ heredity-based genetics.
 - **Entity-Component-System (ECS) backbone** – data and logic cleanly separated
 - **Command queue** – sequential actions with priority and emergency interrupts,
   plus `CommandGroup` for multi-step actions
-- **Event bus** – side effects (energy cost of movement, eating, sleeping)
-  decoupled from commands and systems
+- **Event bus** – side effects (energy cost of movement, eating, sleeping) and
+  birth/death notifications decoupled from commands and systems
 - **A\* pathfinding** – multi-step movement with obstacle avoidance and
   automatic replanning
 - **Vision system** – each creature perceives nearby entities within a radius
@@ -107,7 +107,7 @@ evosim/
 ├── systems.py        # Simulation systems (decision, command, vision, biochemistry, plant, logging)
 ├── simulation.py     # Main loop, fixed timestep, rendering, system scheduling
 ├── event_bus.py      # EventBus, event types and default handlers
-├── logs/             # Runtime logs (git-ignored): log.txt, error_log.txt, last_tick.txt
+├── logs/             # Runtime logs (git-ignored): error_log.txt, last_tick.txt
 └── tests/            # Unit/integration tests
 ```
 
@@ -282,7 +282,11 @@ def on_eat(event: EatEvent):
 ```
 
 Events are queued and dispatched in priority order (highest first) after all
-systems run for the tick.
+systems run for the tick. `BirthEvent` and `DeathEvent` are telemetry hooks:
+they have no default handlers, so nothing happens unless an experiment
+subscribes to them. `BirthEvent` is emitted by `MateCommand` only after the
+child is placed and its `Lineage` is filled; `DeathEvent` is emitted by
+`DeathCommand` with the dead entity and its age.
 
 ### A\* Pathfinding (`MoveToTargetCommand`)
 
@@ -476,9 +480,9 @@ controls a separate property:
 
 Death is not scheduled: as `age` approaches `L`, vitality → 0, `max_health` → 0,
 `health` is clamped to 0 and the normal `DeathCommand` path fires (leaving a
-corpse). `DeathCommand` logs only position, hunger and energy, not age, so an
-experiment that needs survivorship `l(t)` must record `Biochemistry.age` at
-death itself.
+corpse). `DeathCommand` emits `DeathEvent(source=entity, age=bio.age)`, so an
+experiment can record survivorship `l(t)` by subscribing and storing the age.
+There is no built-in sink, so the event is discarded if nobody subscribes.
 
 > Trade-off note: `(1 - senescence_shape / 3)` gives a maximum-shape creature
 > zero fertility, linking longevity to reproduction. Without such a cost,
@@ -492,9 +496,9 @@ death itself.
 | `MoveToTargetCommand` | 15 (to food), 1 (to partner), inherits `WanderCommand`'s otherwise | `eat`/`mating`/`idle` | A\* pathfinding to `(x, y)` |
 | `EatCommand` | 16 | `eat` | Consume adjacent food |
 | `SleepCommand` | 10 | `sleep` | Rest `ticks_to_sleep` ticks, emit `SleepEvent` each tick |
-| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, and both cooldowns are set to `world.balance.mating_cooldown_base + traits.wear_resistance.cooldown` (default base `100`) |
+| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, both cooldowns are set to `world.balance.mating_cooldown_base + traits.wear_resistance.cooldown` (default base `100`), and a successful placement emits `BirthEvent` |
 | `WanderCommand` | 0 (default) | `eat`/`idle` | Samples `wander_angles_count` points within `radius`, picks the best by food/plant/crowd utility, and pushes a `MoveToTargetCommand` |
-| `DeathCommand` | 100 | – | Remove entity, optionally leave a corpse, append to `logs/log.txt` |
+| `DeathCommand` | 100 | – | Remove entity, optionally leave a corpse, emit `DeathEvent` with the entity's age |
 
 ## Events Reference
 
@@ -503,9 +507,16 @@ death itself.
 | `MoveEvent` | `source` | `bio.energy = max(0, bio.energy - 2)` |
 | `SleepEvent` | `source`, `energy_increase` (default 30) | `bio.energy = min(bio.energy + energy_increase, 200)` |
 | `EatEvent` | `source`, `nutrition` (default 35) | `bio.hunger = min(bio.hunger + nutrition, 200)` |
+| `BirthEvent` | `source` (child), `parent1`, `parent2` | No default handler; birth/telemetry hook |
+| `DeathEvent` | `source` (dead entity), `age` | No default handler; mortality/telemetry hook |
 
 > `SleepCommand` passes `balance.sleep_energy_increase` (45 by default), so
 > sleeping restores more energy than the event default.
+
+> `BirthEvent` and `DeathEvent` are emitted only by `MateCommand` and
+> `DeathCommand`. Code that creates or removes entities directly does not emit
+> them. A death handler receives the entity object after it has been removed
+> from the world, so read its components instead of querying the grid.
 
 ## Configuration (`config.py` + `main.py`)
 
@@ -645,13 +656,14 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - **No predator/prey** – all creatures are the same species.
 - **No sexual selection** – mate choice is nearest-in-vision.
 - **No speciation** – a single gene pool.
-- **Logging** – appends death/mating lines to `logs/log.txt`, command failures
-  to `logs/error_log.txt`, and a per-tick snapshot to `logs/last_tick.txt`. The
-  `logs/` directory must exist (a `.gitkeep` is committed). `DeathCommand` and
-  `create_child` write unconditionally; there is no event-log switch yet.
+- **Logging** – command failures go to `logs/error_log.txt`, and the interactive
+  `logging_system` writes a per-tick snapshot to `logs/last_tick.txt`. The
+  `logs/` directory must exist (a `.gitkeep` is committed). Birth and death are
+  emitted as events, but there is no built-in event sink or CSV writer yet.
 - **No experiment runner** – `record_every` / `output_dir` are declared but
   unused, and there is no built-in trait/behaviour CSV export or generation
-  summary.
+  summary. Subscribe to `BirthEvent` / `DeathEvent` to collect individual-level
+  data.
 - **Founder variation** – all founders share the same `founder_genes`; there is
   no standing genetic variation unless you customise `make_creature`.
 - **Dominance model** – one directional weight per gene; it is not

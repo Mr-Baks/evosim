@@ -166,9 +166,7 @@ class DeathCommand(Command):
             world.place_entity(corpse, entity.x, entity.y)
 
         self.complete(entity, status=CommandStatus.COMPLETED)
-        with open('logs/log.txt', 'a') as log:
-            bio: Biochemistry = entity.get_component(Biochemistry)
-            log.write(f'died at {entity.x}, {entity.y} | Hunger: {bio.hunger}, energy: {bio.energy} \n')
+        world.event_bus.emit(DeathEvent(source=entity, age=entity.get_component(Biochemistry).age))
 
 @dataclass
 class SleepCommand(Command):
@@ -456,9 +454,6 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
     vision = child.get_component(Vision)
     vision.radius = round(traits.vision.radius)
 
-    with open('logs/log.txt', 'a') as log:
-        log.write(f'Mating at {parent2.x}, {parent2.y}\n')
-
     return child
 
 @dataclass
@@ -501,5 +496,6 @@ class MateCommand(Command):
             lineage.parents_eid = (self.partner.eid, entity.eid)
 
             self.complete(entity)
+            world.event_bus.emit(BirthEvent(source=child, parent1=self.partner, parent2=entity))
         else:
             self.complete(entity, status=CommandStatus.FAILED)

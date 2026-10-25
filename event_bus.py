@@ -58,3 +58,12 @@ def on_eat(event: EatEvent):
     bio = event.source.get_component(Biochemistry)
     if bio:
         bio.hunger = min(event.nutrition + bio.hunger, 200)
+
+@dataclass
+class BirthEvent(Event):
+    parent1: Entity = None
+    parent2: Entity = None
+
+@dataclass
+class DeathEvent(Event):
+    age: int = None
