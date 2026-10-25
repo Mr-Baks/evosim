@@ -55,6 +55,7 @@ def default_genes(**overrides) -> Genome:
         GeneNames.CROWD_PREFERENCE: -0.5,
         GeneNames.PLANT_APPETENCE: 0.5,
         GeneNames.FOOD_APPETENCE: 0.5,
+        GeneNames.VISION_RADIUS: 0.76,
     }
     values.update(overrides)
     return Genome([Gene(name, value, value) for name, value in values.items()])

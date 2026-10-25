@@ -37,6 +37,7 @@ DEFAULT_FOUNDER_GENES: tuple[FounderGene] = (
     (GeneNames.CROWD_PREFERENCE, -0.5, -0.5, 1),
     (GeneNames.PLANT_APPETENCE, 0.5, 0.5, 1),
     (GeneNames.FOOD_APPETENCE, 0.8, 0.8, 1),
+    (GeneNames.VISION_RADIUS, 0.76, 0.75, 0.5),
 )
 
 
@@ -81,7 +82,6 @@ class BalanceConfig:
     creature_saturation: int = 5
     plant_saturation: int = 5
     eat_reconsider_chance: float = 0.3
-    wander_radius: int = 8
     wander_fallback_radius: int = 6
     wander_angles_count: int = 8
 

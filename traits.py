@@ -21,6 +21,11 @@ class Color:
     b: float
 
 @dataclass(frozen=True)
+class Vision:
+    radius: float
+    metabolic: float
+
+@dataclass(frozen=True)
 class Traits:
     metabolism: float
     speed: Speed
@@ -39,6 +44,7 @@ class Traits:
     crowd_preference: float
     plant_appetence: float
     food_appetence: float
+    vision: Vision
 
     def wear(self, age: float) -> float:
         """Fraction of the lifespan used at age, capped at 1."""
@@ -54,11 +60,11 @@ class Traits:
 
     def energy_drain(self, vitality: float) -> float:
         """Energy spent per awake tick; frailer bodies burn more."""
-        return self.metabolism * self.speed.metabolic ** 2 * (2 - vitality)
+        return self.metabolism * self.speed.metabolic ** 2 * (2 - vitality) * self.vision.metabolic
 
     def hunger_drain(self) -> float:
         """Hunger spent per tick; longer-lived bodies burn more."""
-        return self.metabolism * self.speed.metabolic ** 2 * (self.wear_resistance.aging / HUNGER_COST_SCALE)
+        return self.metabolism * self.speed.metabolic ** 2 * (self.wear_resistance.aging / HUNGER_COST_SCALE) * self.vision.metabolic
 
     def effective_fertility(self, vitality: float) -> float:
         """Fertility after the vitality gate and the senescence-shape penalty."""
@@ -103,6 +109,10 @@ def derive(genome: Genome) -> Traits:
         crowd_preference=gp(GeneNames.CROWD_PREFERENCE, default=0.0),
         plant_appetence=gp(GeneNames.PLANT_APPETENCE, default=0.0),
         food_appetence=gp(GeneNames.FOOD_APPETENCE, default=0.0),
+        vision=Vision(
+            radius=gp(GeneNames.VISION_RADIUS, (1, 10), log=True),
+            metabolic=gp(GeneNames.VISION_RADIUS, (1, 1.25), log=True),
+        ),
     )
 
 def traits_for(genome: Genome) -> Traits:

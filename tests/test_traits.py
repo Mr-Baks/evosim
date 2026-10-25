@@ -22,6 +22,7 @@ ALL_GENES = [
     GeneNames.COLOR_R,
     GeneNames.COLOR_G,
     GeneNames.COLOR_B,
+    GeneNames.VISION_RADIUS
 ]
 
 
@@ -131,7 +132,7 @@ class TestFormulas:
     def setup_method(self):
         self.t = derive(genome_at(0.0))
         self.lifespan = self.t.wear_resistance.aging            # sqrt(180 * 700)
-        self.base = self.t.metabolism * self.t.speed.metabolic ** 2
+        self.base = self.t.metabolism * self.t.speed.metabolic ** 2 * self.t.vision.metabolic
 
     def test_wear_saturates_at_one(self):
         assert self.t.wear(0) == pytest.approx(0.0)

@@ -323,7 +323,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `Biochemistry` | `energy: float`, `hunger: float`, `health: float`, `max_health: float`, `vitality: float`, `age: float` | Vital stats + ageing |
 | `Eatable` | `nutrition: int` | Food value |
 | `Breedable` | `fertility: float`, `cooldown: int` | Reproduction (`fertility` defaults to `1`; scaled by vitality each tick) |
-| `Vision` | `radius: int`, `visibles: list[Entity]` | Perception (`radius` defaults to `4`; `make_creature` uses `8`) |
+| `Vision` | `radius: int`, `visibles: list[Entity]` | Perception |
 | `CommandQueue` | `queue: list[Command]`, `running: Command \| None` | Pending commands and the currently running command |
 | `Plant` | `energy: int`, `energy_increase: int`, `fructify_threshold: int`, `fruit_nutrition: int` | Plant growth |
 | `Genome` | `genes: dict[str, Gene]` | Heritable genetic data |
@@ -444,14 +444,15 @@ The base scalings are:
 | `food_appetence` | `Traits.food_appetence` — attraction to visible food while starving; `WanderCommand` scores candidate points by it | raw `(-1, 1)` |
 | `mating_*_threshold` | minimum stat to mate | `(0, 200)` |
 | `color_r/g/b` | offspring colour | `(0, 256)` |
+| `vision` | `Traits.vision.radius` / `Traits.vision.metabolic` | `(1, 10)`, log / `(1, 1.25)`, log |
 
 | Formula | Method |
 |---------|--------|
 | `wear = min(1, age / L)` | `Traits.wear(age)` |
 | `vitality = max(0, 1 - wear ** a)` | `Traits.vitality(age)` |
 | `max_health = vitality * 100` | `Traits.max_health(vitality)` |
-| `energy = metabolism · speed² · (2 - vitality)` | `Traits.energy_drain(vitality)` |
-| `hunger = metabolism · speed² · (L / 710)` | `Traits.hunger_drain()` |
+| `energy = metabolism · speed² · (2 - vitality) * vision` | `Traits.energy_drain(vitality)` |
+| `hunger = metabolism · speed² · (L / 710) * vision` | `Traits.hunger_drain()` |
 | `fertility · min(1, vitality·2) · (1 - a/3)` | `Traits.effective_fertility(vitality)` |
 | `regen_increase · metabolism · vitality` | `Traits.regeneration_gain(vitality)` |
 | `regen_increase² · metabolism / 2` | `Traits.regeneration_cost()` |
@@ -653,8 +654,6 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   summary.
 - **Founder variation** – all founders share the same `founder_genes`; there is
   no standing genetic variation unless you customise `make_creature`.
-- **Offspring vision** – `create_child` instantiates `Vision()` with its default
-  `radius=4`, while `make_creature` gives founders `Vision(8)`.
 - **Dominance model** – one directional weight per gene; it is not
   allele-specific, cannot represent over/underdominance, and is not the
   standard `h` coefficient. Old TOML configs that used `true` / `false` must be

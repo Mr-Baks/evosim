@@ -242,5 +242,5 @@ def decision_system(entities: set[Entity], world: World):
                                      )
                         break
         elif 'idle' not in state.states:
-            push_command(e, world, WanderCommand(radius=world.balance.wander_radius, target_state=action))
+            push_command(e, world, WanderCommand(radius=vision.radius, target_state=action))
 

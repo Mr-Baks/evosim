@@ -453,6 +453,9 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
     breeadable = child.get_component(Breedable)
     breeadable.fertility = traits.fertility
 
+    vision = child.get_component(Vision)
+    vision.radius = round(traits.vision.radius)
+
     with open('logs/log.txt', 'a') as log:
         log.write(f'Mating at {parent2.x}, {parent2.y}\n')
 
