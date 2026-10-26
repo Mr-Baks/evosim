@@ -84,9 +84,7 @@ def build_simulation(cfg: SimConfig) -> Simulation:
 def run_headless(sim: Simulation, ticks: int) -> None:
     """Step the simulation without wall-clock pacing or rendering."""
     for _ in range(ticks):
-        sim.handle_systems()
-        sim.world.event_bus.dispatch()
-        sim.tick += 1
+        sim.step()
 
 def main(cfg: SimConfig | None = None) -> None:
     if cfg is None:

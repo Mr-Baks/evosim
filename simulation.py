@@ -32,6 +32,14 @@ class Simulation:
 
     def add_on_tick(self, callback: callable) -> None:
         self.on_tick_callbacks.append(callback)
+
+    def step(self) -> None:
+        self.handle_systems()
+        self.tick += 1
+        self.world.event_bus.dispatch()
+
+        for c in self.on_tick_callbacks:
+            c(self)
         
     def render(self) -> list[list[str]]: 
         screen = [[self.background_sym for _ in range(self.world.width)] for _ in range(self.world.height)]
@@ -70,17 +78,12 @@ class Simulation:
             accumulator += dt
 
             while accumulator >= tick_duration:
-                self.handle_systems()
-                self.world.event_bus.dispatch()
+                self.step()
                 accumulator -= tick_duration
-                self.tick += 1
 
                 if self.tick == target_tick:
                     self.is_running = False
                     break
-
-                for c in self.on_tick_callbacks:
-                    c(self)
 
             self.print_scene()
             elapsed = time.time() - now
