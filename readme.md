@@ -107,6 +107,7 @@ evosim/
 ├── systems.py        # Simulation systems (decision, command, vision, biochemistry, plant, logging)
 ├── simulation.py     # Main loop, fixed timestep, rendering, system scheduling
 ├── event_bus.py      # EventBus, event types and default handlers
+├── logger.py         # RunLogger: CSV telemetry for population, births and deaths
 ├── logs/             # Runtime logs (git-ignored): error_log.txt, last_tick.txt
 └── tests/            # Unit/integration tests
 ```
@@ -525,7 +526,7 @@ by how often they change:
 
 | Layer | Purpose | Example fields |
 |-------|---------|----------------|
-| `RunConfig` | a single run | `seed`, `ticks`, `headless`, `tickspeed`, `fps`; `record_every` and `output_dir` are defined but not used by the current runner |
+| `RunConfig` | a single run | `seed`, `ticks`, `headless`, `tickspeed`, `fps`, `record_every`, `output_dir` |
 | `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes` |
 | `BalanceConfig` | world "physics", read by systems via `world.balance` | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
 
@@ -547,16 +548,29 @@ python main.py --seed 7 --ticks 2000 --headless
 python main.py --config scenario.toml
 ```
 
-`--output-dir` and `--record-every` are accepted for compatibility but are not
-consumed by the current runner; experiment output must be written by your own
-code.
+`--output-dir` sets where `main()` writes telemetry, and `--record-every` sets
+the population sampling period.
 
 `main.build_simulation(cfg)` assembles the world from `cfg` without stepping.
-`main.main(cfg)` seeds the RNG from `cfg.run.seed`, then either runs the
-interactive loop (`sim.run`) or `run_headless` (no rendering, no wall-clock
-pacing). Importing `main` has no side effects. `dump_config(cfg, path)` writes
-the effective config to a chosen path for reproducibility; `main` does not call
-it automatically.
+`main.build_logger(sim, cfg)` attaches the basic CSV logger described below.
+`main.main(cfg)` seeds the RNG from `cfg.run.seed`, builds the logger, then
+either runs the interactive loop (`sim.run`) or `run_headless` (no rendering,
+no wall-clock pacing), and closes the logger in a `finally` block. Importing
+`main` has no side effects. `dump_config(cfg, path)` writes the effective config
+to a chosen path for reproducibility; `main` does not call it automatically.
+
+### Basic telemetry
+
+`main()` writes three CSVs into `cfg.run.output_dir` (default `results/`):
+
+- `population.csv` – `tick`, creature/plant/food counts, mean energy, hunger,
+  age and speed, sampled every `record_every` ticks (tick `0` is included).
+- `births.csv` – `tick`, child eid, both parent eids and the child's generation.
+- `deaths.csv` – `tick`, eid, age, generation, energy, hunger, health and
+  max health at death.
+
+The logger is observational: it only reads the world and subscribes to
+`BirthEvent` / `DeathEvent`; it does not consume the RNG.
 
 ### System registration in `build_simulation`
 
@@ -658,12 +672,13 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - **No speciation** – a single gene pool.
 - **Logging** – command failures go to `logs/error_log.txt`, and the interactive
   `logging_system` writes a per-tick snapshot to `logs/last_tick.txt`. The
-  `logs/` directory must exist (a `.gitkeep` is committed). Birth and death are
-  emitted as events, but there is no built-in event sink or CSV writer yet.
-- **No experiment runner** – `record_every` / `output_dir` are declared but
-  unused, and there is no built-in trait/behaviour CSV export or generation
-  summary. Subscribe to `BirthEvent` / `DeathEvent` to collect individual-level
-  data.
+  `logs/` directory must exist (a `.gitkeep` is committed). `main()` installs
+  `RunLogger`, which writes basic population/birth/death CSVs to
+  `cfg.run.output_dir`.
+- **No experiment runner** – the basic logger does not export trait,
+  behaviour or generation summaries, and there is no condition × seed matrix
+  runner yet. Subscribe to `BirthEvent` / `DeathEvent` or add `RunLogger`
+  queries for experiment-specific data.
 - **Founder variation** – all founders share the same `founder_genes`; there is
   no standing genetic variation unless you customise `make_creature`.
 - **Dominance model** – one directional weight per gene; it is not

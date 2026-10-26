@@ -7,8 +7,9 @@ import random
 from commands import *
 from config import SimConfig, load_config
 from entity import *
-from event_bus import EatEvent, Event, EventBus, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
+from event_bus import BirthEvent, DeathEvent, EatEvent, Event, EventBus, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
 from genome import Gene, GeneNames, Genome
+from logger import RunLogger
 from simulation import Simulation
 from systems import *
 from world import World
@@ -57,6 +58,69 @@ def _scatter(sim: Simulation, count: int, make):
         if not world.get_entity(x, y):
             make(x, y)
 
+def _mean(values):
+    return sum(values) / len(values) if values else 0.0
+
+def log_population(world: World, tick: int):
+    creatures = [e for e in world.index.get_with(Movable) if e.get_component(Biochemistry)]
+    biochemistry = [e.get_component(Biochemistry) for e in creatures]
+    return [
+        tick,
+        len(creatures),
+        len(world.index.get_with(Plant)),
+        len(world.index.get_with(Eatable)),
+        _mean([bio.energy for bio in biochemistry]),
+        _mean([bio.hunger for bio in biochemistry]),
+        _mean([bio.age for bio in biochemistry]),
+        _mean([e.get_component(Movable).speed for e in creatures]),
+    ]
+
+def log_birth(event: BirthEvent, world: World, tick: int):
+    child = event.source
+    lineage = child.get_component(Lineage)
+    return [
+        tick,
+        child.eid,
+        event.parent1.eid if event.parent1 else None,
+        event.parent2.eid if event.parent2 else None,
+        lineage.generation if lineage else 0,
+    ]
+
+def log_death(event: DeathEvent, world: World, tick: int):
+    entity = event.source
+    bio = entity.get_component(Biochemistry)
+    lineage = entity.get_component(Lineage)
+    return [
+        tick,
+        entity.eid,
+        event.age,
+        lineage.generation if lineage else 0,
+        bio.energy if bio else None,
+        bio.hunger if bio else None,
+        bio.health if bio else None,
+        bio.max_health if bio else None,
+    ]
+
+def build_logger(sim: Simulation, cfg: SimConfig) -> RunLogger:
+    logger = RunLogger(sim.world, sim.world.event_bus, cfg.run.output_dir)
+    period = max(1, cfg.run.record_every)
+    logger.add_query(
+        'population', log_population,
+        ['tick', 'creatures', 'plants', 'food', 'mean_energy', 'mean_hunger', 'mean_age', 'mean_speed'],
+        every=period,
+    )
+    logger.add_event_query(
+        'births', BirthEvent, log_birth,
+        ['tick', 'child_eid', 'parent1_eid', 'parent2_eid', 'generation'],
+    )
+    logger.add_event_query(
+        'deaths', DeathEvent, log_death,
+        ['tick', 'eid', 'age', 'generation', 'energy', 'hunger', 'health', 'max_health'],
+    )
+    sim.add_on_tick(lambda s: logger.on_tick(s.tick))
+    logger.on_tick(sim.tick)
+    return logger
+
 def build_simulation(cfg: SimConfig) -> Simulation:
     """Assemble the default world described by ``cfg`` (no stepping)."""
     sim = Simulation(cfg.run.tickspeed, cfg.run.fps, cfg.scenario.world.size, background_sym='.')
@@ -92,11 +156,15 @@ def main(cfg: SimConfig | None = None) -> None:
 
     random.seed(cfg.run.seed)
     sim = build_simulation(cfg)
+    logger = build_logger(sim, cfg)
 
-    if cfg.run.headless:
-        run_headless(sim, cfg.run.ticks)
-    else:
-        sim.run(target_tick=cfg.run.ticks)
+    try:
+        if cfg.run.headless:
+            run_headless(sim, cfg.run.ticks)
+        else:
+            sim.run(target_tick=cfg.run.ticks)
+    finally:
+        logger.close()
 
 if __name__ == '__main__':
     main()
