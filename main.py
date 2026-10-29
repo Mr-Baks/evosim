@@ -22,10 +22,8 @@ def make_creature(x, y, world: World, cfg: SimConfig, color=None):
     genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, (color[1] - 128) / 128, dominance=0.5))
     genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, (color[2] - 128) / 128, dominance=0.5))
 
-    e = (Entity().add_component(Movable()).add_component(Biochemistry())
-         .add_component(Vision(8)).add_component(CommandQueue()).add_component(State())
-         .add_component(Breedable()).add_component(Render(symbol='C', color=color))
-         .add_component(Genome(genes))).add_component(Lineage())
+    e = create_entity_from_genome(Genome(genes))
+
     world.place_entity(e, x, y)
 
 def make_food(x, y, world: World, nutrition=20):

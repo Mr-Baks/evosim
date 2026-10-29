@@ -424,37 +424,56 @@ class WanderCommand(Command):
         command.execute(entity, world)
         push_command(entity, world, command)
 
+def _get_component(entity: Entity, component_type: type[Component]) -> Component:
+    if entity.has_component(component_type):
+        component = entity.get_component(component_type)
+    else:
+        component = component_type()
+        entity.add_component(component)
+
+    return component
+
+def create_entity_from_genome(genome: Genome, base_entity: Entity | None = None) -> Entity:
+    if base_entity is None:
+        base_entity = Entity()
+
+    _get_component(base_entity, Biochemistry)
+    _get_component(base_entity, CommandQueue)
+    _get_component(base_entity, State)
+    _get_component(base_entity, Lineage)
+    base_entity.add_component(genome)
+
+    traits = traits_for(genome)
+
+    render = _get_component(base_entity, Render)
+    render.symbol = 'C'
+    render.color = (int(traits.color.r), int(traits.color.g), int(traits.color.b))
+
+    movable = _get_component(base_entity, Movable)
+    movable.speed = traits.speed.locomotion
+
+    breedable = _get_component(base_entity, Breedable)
+    breedable.fertility = traits.fertility
+
+    vision = _get_component(base_entity, Vision)
+    vision.radius = round(traits.vision.radius)
+
+    return base_entity
+
 def create_child(parent1: Entity, parent2: Entity, world: World):
     child = Entity()
-    
+
     components = set(parent1.components_dict.keys()) | set(parent2.components_dict.keys())
     for c in components:
         child.add_component(c())
-    if not child.has_component(Lineage):
-        child.add_component(Lineage())
-    
-    render = child.get_component(Render)
-    render.symbol = 'C'
 
     genome1 = parent1.get_component(Genome)
     genome2 = parent2.get_component(Genome)
     genome: Genome = genome1.recombine(genome2)
-
-    child.add_component(genome)
-
-    traits = traits_for(genome)
-    render.color = (int(traits.color.r), int(traits.color.g), int(traits.color.b))
-
-    movable = child.get_component(Movable)
-    movable.speed = traits.speed.locomotion
-
-    breeadable = child.get_component(Breedable)
-    breeadable.fertility = traits.fertility
-
-    vision = child.get_component(Vision)
-    vision.radius = round(traits.vision.radius)
+    child = create_entity_from_genome(genome, child)
 
     return child
+
 
 @dataclass
 class MateCommand(Command): 

@@ -13,7 +13,7 @@ from config import (
     dump_config,
     load_config,
 )
-from entity import Lineage, Movable, Plant
+from entity import Breedable, Lineage, Movable, Plant, Vision
 from genome import GeneNames, Genome
 from traits import traits_for
 from world import World
@@ -135,6 +135,38 @@ class TestMainWiring:
         # Color genes derive from scenario.creature_color.
         assert genome.genes[GeneNames.COLOR_R].allele1 == (80 - 128) / 128
         assert genome.genes[GeneNames.COLOR_R].allele2 == (80 - 128) / 128
+
+    def test_founder_components_are_derived_from_genome(self):
+        custom = {
+            GeneNames.SPEED: 0.2,
+            GeneNames.FERTILITY: -1.0,
+            GeneNames.VISION_RADIUS: -1.0,
+        }
+        founder_genes = tuple(
+            (name, custom.get(name, a1), custom.get(name, a2), dominance)
+            for name, a1, a2, dominance in DEFAULT_FOUNDER_GENES
+        )
+        cfg = SimConfig(
+            scenario=ScenarioConfig(
+                world=WorldConfig(10, 10),
+                founder_genes=founder_genes,
+            )
+        )
+        w = World(10, 10)
+        main.make_creature(5, 5, w, cfg)
+
+        entity = w.get_entity(5, 5)
+        genome = entity.get_component(Genome)
+        traits = traits_for(genome)
+
+        assert entity.get_component(Movable).speed == pytest.approx(traits.speed.locomotion)
+        assert entity.get_component(Breedable).fertility == pytest.approx(traits.fertility)
+        assert entity.get_component(Vision).radius == round(traits.vision.radius)
+
+        # None of these should be left at the component constructor defaults.
+        assert entity.get_component(Movable).speed != Movable().speed
+        assert entity.get_component(Breedable).fertility != Breedable().fertility
+        assert entity.get_component(Vision).radius != Vision().radius
 
     def test_founder_color_matches_scenario(self):
         cfg = SimConfig(scenario=ScenarioConfig(world=WorldConfig(10, 10)))

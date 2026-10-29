@@ -438,6 +438,60 @@ class TestMateCommand:
         assert child.get_component(Lineage).generation == 5
 
 
+class TestCreateEntityFromGenome:
+    def test_builds_a_complete_creature_from_scratch(self):
+        genome = default_genes(
+            speed=0.2,
+            fertility=0.5,
+            vision_radius=-0.5,
+            color_r=0.25,
+            color_g=-0.25,
+            color_b=0.5,
+        )
+
+        entity = create_entity_from_genome(genome)
+        traits = traits_for(genome)
+
+        assert entity.get_component(Genome) is genome
+        assert entity.has_component(Biochemistry)
+        assert entity.has_component(CommandQueue)
+        assert entity.has_component(State)
+        assert entity.has_component(Lineage)
+        assert entity.get_component(Lineage).generation == 0
+
+        assert entity.get_component(Movable).speed == pytest.approx(traits.speed.locomotion)
+        assert entity.get_component(Breedable).fertility == pytest.approx(traits.fertility)
+        assert entity.get_component(Vision).radius == round(traits.vision.radius)
+        assert entity.get_component(Render).symbol == 'C'
+        assert entity.get_component(Render).color == (
+            int(traits.color.r),
+            int(traits.color.g),
+            int(traits.color.b),
+        )
+
+        # The values must come from the genome, not from component defaults.
+        assert entity.get_component(Movable).speed != Movable().speed
+        assert entity.get_component(Breedable).fertility != Breedable().fertility
+        assert entity.get_component(Vision).radius != Vision().radius
+
+    def test_keeps_existing_base_components(self):
+        genome = default_genes(speed=0.2)
+        base = (
+            Entity()
+            .add_component(Biochemistry(energy=42))
+            .add_component(CommandQueue())
+            .add_component(State())
+            .add_component(Lineage(generation=7))
+        )
+
+        entity = create_entity_from_genome(genome, base)
+
+        assert entity is base
+        assert entity.get_component(Biochemistry).energy == 42
+        assert entity.get_component(Lineage).generation == 7
+        assert entity.get_component(Genome) is genome
+
+
 class TestCreateChild:
     def test_create_child_combines_components(self):
         genes1 = [Gene(GeneNames.SPEED, 0.2, 0.2),
@@ -478,6 +532,8 @@ class TestCreateChild:
             rel_tol=1e-9,
         )
         assert child.get_component(Render).color == (r, g, b)
+        assert child.get_component(Breedable).fertility == pytest.approx(traits_for(genome).fertility)
+        assert child.get_component(Vision).radius == round(traits_for(genome).vision.radius)
 
 
 def _creature(world, x=5, y=5, speed=1):
