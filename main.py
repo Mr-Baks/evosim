@@ -15,23 +15,24 @@ from systems import *
 from world import World
 
 
-def jitter_genes(genes: tuple[FounderGene], jitter: float = 0.1) -> tuple[FounderGene]:
+def jitter_genes(genes: tuple[FounderGene, ...], jitter: float = 0.0) -> tuple[FounderGene, ...]:
+    """Add shared per-locus jitter while keeping alleles in ``[-1, 1]``."""
+    if not 0 <= jitter <= 1:
+        raise ValueError("Founder gene jitter must be in [0, 1]")
+    if jitter == 0:
+        return genes
+
     jittered = []
     for gene in genes:
-        delta = random.uniform(-jitter, jitter)
         name, a1, a2, dominance = gene
+        
+        limit = min(jitter, 1 - abs(a1), 1 - abs(a2))
+        if limit <= 0:
+            jittered.append(gene)
+            continue
 
-        if abs(a1 + delta) > 1:
-            a1 -= delta
-        else:
-            a1 += delta
-
-        if abs(a2 + delta) > 1:
-            a2 -= delta
-        else:
-            a2 += delta
-
-        jittered.append((name, a1, a2, dominance))
+        delta = random.uniform(-limit, limit)
+        jittered.append((name, a1 + delta, a2 + delta, dominance))
     return tuple(jittered)
 
 def make_creature(x, y, world: World, cfg: SimConfig, color=None):

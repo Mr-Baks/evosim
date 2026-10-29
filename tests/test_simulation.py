@@ -3,7 +3,7 @@ from simulation import Simulation
 from world import World
 from entity import Entity, Biochemistry, State, Vision, Movable, Breedable, Render, Eatable, Plant
 from commands import CommandQueue, MoveToTargetCommand, CommandStatus
-from event_bus import EventBus, EatEvent, SleepEvent, MoveEvent, on_eat, on_sleep, on_move
+from event_bus import EventBus, EatEvent, SleepEvent, MoveEvent, BirthEvent, on_eat, on_sleep, on_move
 from genome import Genome
 from tests.helpers import default_genes, make_decision_random_deterministic
 
@@ -91,6 +91,26 @@ class TestSimulation:
         sim.add_on_tick(callback)
         
         assert callback in sim.on_tick_callbacks
+
+    def test_step_dispatches_events_before_advancing_tick(self):
+        sim = Simulation(tickspeed=10, fps=30, world_size=(10, 10))
+        entity = Entity().add_component(Biochemistry())
+        sim.world.place_entity(entity, 5, 5)
+
+        event_ticks = []
+        callback_ticks = []
+        sim.world.event_bus.subscribe(BirthEvent, lambda event: event_ticks.append(sim.tick))
+        sim.add_on_tick(lambda s: callback_ticks.append(s.tick))
+
+        def emit_birth(entities, world):
+            world.event_bus.emit(BirthEvent(source=entity))
+
+        sim.register_system(frozenset([Biochemistry]), emit_birth, priority=10)
+        sim.step()
+
+        assert event_ticks == [0]
+        assert callback_ticks == [1]
+        assert sim.tick == 1
 
     def test_render_returns_grid(self):
         sim = Simulation(tickspeed=10, fps=30, world_size=(5, 5))

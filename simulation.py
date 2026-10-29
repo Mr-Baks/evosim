@@ -35,8 +35,8 @@ class Simulation:
 
     def step(self) -> None:
         self.handle_systems()
-        self.tick += 1
         self.world.event_bus.dispatch()
+        self.tick += 1
 
         for c in self.on_tick_callbacks:
             c(self)

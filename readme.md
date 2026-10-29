@@ -542,7 +542,7 @@ cfg = load_config("scenario.toml")   # or load_config() for defaults
 cfg.run.seed                 # 1
 cfg.scenario.world.size      # (100, 40)
 cfg.scenario.founder_genes   # ((name, allele1, allele2, dominance), ...)
-cfg.scenario.founder_genes_jitter  # 0.1 by default
+cfg.scenario.founder_genes_jitter  # 0.0 by default
 ```
 
 ```bash
@@ -600,16 +600,17 @@ above (`0.5` additive, `1` complete dominance of the larger allele); all
 founders use the same weight for a given gene.
 
 Each call to `make_creature()` creates its own founder genome. For every
-locus it draws one delta from `U(-founder_genes_jitter, +founder_genes_jitter)`
-and adds that same delta to both alleles. This creates standing variation
-between founders while preserving each founder's heterozygosity
-(`allele1 - allele2`) and the mean phenotype. If an allele would leave
-`[-1, 1]`, the delta is applied in the opposite direction; alleles already at
-a bound therefore move inward. The default jitter is `0.1`. Set
-`scenario.founder_genes_jitter = 0.0` to create genetically identical
-founders. The current implementation still draws one zero-width sample per
-locus at `0.0`, so the RNG stream is not identical to pre-jitter versions; an
-early return from `jitter_genes()` would restore exact reproducibility.
+locus it computes an effective jitter limit
+`min(founder_genes_jitter, 1 - |allele1|, 1 - |allele2|)` and draws one delta
+from `U(-limit, +limit)`, adding that same delta to both alleles. This creates
+standing variation between founders while preserving each founder's
+heterozygosity (`allele1 - allele2`) and the mean phenotype. The shrinking
+range keeps the delta symmetric near the `[-1, 1]` bounds; a locus already at
+a bound has no headroom and is left unchanged rather than being biased inward.
+`founder_genes_jitter` must be in `[0, 1]`. The default is `0.0`, which
+returns the founder genes unchanged and does not consume the RNG. Set it to
+e.g. `0.1` to create standing variation; because the default
+`MATING_DRIVE=1.0` sits at a bound, that locus is then not jittered.
 
 Three color genes are appended after jitter, derived from
 `scenario.creature_color`; they are not jittered, so every founder has the
@@ -697,15 +698,16 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   behaviour or generation summaries, and there is no condition × seed matrix
   runner yet. Subscribe to `BirthEvent` / `DeathEvent` or add `RunLogger`
   queries for experiment-specific data.
-- **Founder variation** – `founder_genes` is the shared baseline, but by
-  default each founder receives independent per-locus jitter
-  (`founder_genes_jitter=0.1`). Set it to `0.0` for identical founders. Genes
-  starting exactly at `-1` or `+1` jitter inward, so their founder mean is
-  biased away from the bound (notably `MATING_DRIVE=1.0`).
-- **Dominance model** – one directional weight per gene; it is not
-  allele-specific, cannot represent over/underdominance, and is not the
-  standard `h` coefficient. Old TOML configs that used `true` / `false` must be
-  rewritten as `1` / `0.5`.
+- **Founder variation** – `founder_genes` is the shared baseline. The
+  jitter defaults to `0.0` (identical founders); set
+  `founder_genes_jitter=0.1` for independent per-locus standing variation.
+  The effective range shrinks near `-1` / `+1`, and loci already at a bound
+  are not jittered, so the default `MATING_DRIVE=1.0` stays fixed unless its
+  baseline is moved inward.
+- **Dominance model** – one directional weight per gene; `Gene` rejects
+  weights outside `[0, 1]`. It is not allele-specific, cannot represent
+  over/underdominance, and is not the standard `h` coefficient. Old TOML
+  configs that used `true` / `false` must be rewritten as `1` / `0.5`.
 - **Config** – `mating_cooldown_scaling` is defined but unused; the cooldown
   scaling is hard-coded in `traits.py`.
 

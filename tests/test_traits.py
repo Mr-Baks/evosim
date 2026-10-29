@@ -89,6 +89,13 @@ class TestDeriveBounds:
         assert t.mating_hunger_threshold == pytest.approx(200.0)
         assert (t.color.r, t.color.g, t.color.b) == pytest.approx((256.0, 256.0, 256.0))
 
+    def test_missing_vision_gene_uses_default(self):
+        genes = [Gene(name, 0.75, 0.75) for name in ALL_GENES if name != GeneNames.VISION_RADIUS]
+        t = derive(Genome(genes))
+
+        assert t.vision.radius == pytest.approx(7.5)
+        assert t.vision.metabolic == pytest.approx(1.2)
+
 
 class TestPleiotropy:
     def test_one_gene_drives_two_speed_effects(self):

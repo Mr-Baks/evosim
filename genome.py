@@ -5,6 +5,9 @@ from entity import Component
 
 class Gene:
     def __init__(self, name: str, allele1: float, allele2: float, dominance: float = 1):
+        if not 0 <= dominance <= 1:
+            raise ValueError("Dominance must be in [0, 1]")
+
         self.name = name
         self.allele1 = allele1
         self.allele2 = allele2

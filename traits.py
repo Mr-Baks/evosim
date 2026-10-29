@@ -110,8 +110,8 @@ def derive(genome: Genome) -> Traits:
         plant_appetence=gp(GeneNames.PLANT_APPETENCE, default=0.0),
         food_appetence=gp(GeneNames.FOOD_APPETENCE, default=0.0),
         vision=Vision(
-            radius=gp(GeneNames.VISION_RADIUS, (1, 10), log=True),
-            metabolic=gp(GeneNames.VISION_RADIUS, (1, 1.25), log=True),
+            radius=gp(GeneNames.VISION_RADIUS, (1, 10), default=7.5, log=True),
+            metabolic=gp(GeneNames.VISION_RADIUS, (1, 1.25), default=1.2, log=True),
         ),
     )
 

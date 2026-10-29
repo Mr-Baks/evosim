@@ -16,6 +16,11 @@ class TestGene:
         assert g.allele2 == -0.4
         assert g.dominance == 1
 
+    @pytest.mark.parametrize('dominance', [-0.01, 1.01])
+    def test_rejects_dominance_outside_unit_interval(self, dominance):
+        with pytest.raises(ValueError, match='Dominance must be in'):
+            Gene('speed', 0.2, -0.4, dominance=dominance)
+
     def test_phenotype_dominance_one_is_max(self):
         assert Gene('x', 0.2, 0.8).phenotype == pytest.approx(0.8)
         assert Gene('x', -0.9, -0.3).phenotype == pytest.approx(-0.3)

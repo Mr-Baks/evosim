@@ -26,7 +26,7 @@ class TestDefaults:
         assert cfg.scenario.world == WorldConfig(width=100, height=40)
         assert cfg.scenario.initial_plants == 120
         assert cfg.scenario.initial_creatures == 40
-        assert cfg.scenario.founder_genes_jitter == 0.1
+        assert cfg.scenario.founder_genes_jitter == 0.0
         assert isinstance(cfg.balance, BalanceConfig)
 
     def test_world_size_property(self):
@@ -229,12 +229,22 @@ class TestMainWiring:
 
 
 class TestFounderJitter:
-    def test_zero_jitter_keeps_genes_unchanged(self):
+    def test_zero_jitter_keeps_genes_and_does_not_consume_rng(self, monkeypatch):
         genes = (
             (GeneNames.SPEED, -0.4, 0.2, 0.5),
             (GeneNames.MATING_DRIVE, 1.0, 0.4, 1.0),
         )
+
+        def unexpected(*args):
+            raise AssertionError("jitter=0 must not draw a random delta")
+
+        monkeypatch.setattr(main.random, "uniform", unexpected)
         assert main.jitter_genes(genes, jitter=0.0) == genes
+
+    @pytest.mark.parametrize("jitter", [-0.1, 1.1])
+    def test_rejects_jitter_outside_unit_interval(self, jitter):
+        with pytest.raises(ValueError, match="Founder gene jitter must be in"):
+            main.jitter_genes(((GeneNames.SPEED, 0.0, 0.0, 0.5),), jitter=jitter)
 
     def test_same_delta_is_applied_to_both_alleles(self, monkeypatch):
         monkeypatch.setattr(main.random, "uniform", lambda low, high: 0.05)
@@ -248,25 +258,31 @@ class TestFounderJitter:
         assert a2 == pytest.approx(0.25)
         assert dominance == 0.5
 
-    @pytest.mark.parametrize(
-        ("allele", "delta", "expected"),
-        [
-            (1.0, 0.25, 0.75),
-            (1.0, -0.25, 0.75),
-            (-1.0, 0.25, -0.75),
-            (-1.0, -0.25, -0.75),
-        ],
-    )
-    def test_boundary_jitter_stays_inside_range(self, monkeypatch, allele, delta, expected):
-        monkeypatch.setattr(main.random, "uniform", lambda low, high: delta)
+    @pytest.mark.parametrize("allele", [-1.0, 1.0])
+    def test_boundary_loci_are_left_unchanged(self, monkeypatch, allele):
+        def unexpected(*args):
+            raise AssertionError("a locus without headroom must not draw a delta")
+
+        monkeypatch.setattr(main.random, "uniform", unexpected)
         genes = ((GeneNames.SPEED, allele, allele, 0.5),)
+
+        assert main.jitter_genes(genes, jitter=0.25) == genes
+
+    def test_jitter_range_shrinks_near_boundary(self, monkeypatch):
+        calls = []
+        def uniform(low, high):
+            calls.append((low, high))
+            return 0.04
+
+        monkeypatch.setattr(main.random, "uniform", uniform)
+        genes = ((GeneNames.SPEED, 0.95, 0.5, 0.5),)
 
         (_, a1, a2, _), = main.jitter_genes(genes, jitter=0.25)
 
-        assert a1 == pytest.approx(expected)
-        assert a2 == pytest.approx(expected)
-        assert -1 <= a1 <= 1
-        assert -1 <= a2 <= 1
+        assert calls[0][0] == pytest.approx(-0.05)
+        assert calls[0][1] == pytest.approx(0.05)
+        assert a1 == pytest.approx(0.99)
+        assert a2 == pytest.approx(0.54)
 
     def test_make_creature_applies_jitter_but_not_to_color_genes(self, monkeypatch):
         monkeypatch.setattr(main.random, "uniform", lambda low, high: 0.05)
@@ -285,11 +301,10 @@ class TestFounderJitter:
         assert speed.allele1 == pytest.approx(-0.55)
         assert speed.allele2 == pytest.approx(-0.55)
 
-        # MATING_DRIVE starts at the upper bound, so the positive delta is
-        # reflected back into the valid interval.
+        # MATING_DRIVE starts at the upper bound, so it has no jitter headroom.
         mating = genome.genes[GeneNames.MATING_DRIVE]
-        assert mating.allele1 == pytest.approx(0.95)
-        assert mating.allele2 == pytest.approx(0.95)
+        assert mating.allele1 == pytest.approx(1.0)
+        assert mating.allele2 == pytest.approx(1.0)
 
         # Color genes are appended after jitter and must stay exact.
         color_r = genome.genes[GeneNames.COLOR_R]
@@ -297,9 +312,8 @@ class TestFounderJitter:
         assert color_r.allele2 == pytest.approx((80 - 128) / 128)
 
     def test_each_founder_is_jittered_independently(self, monkeypatch):
-        zeroes = [0.0] * (len(DEFAULT_FOUNDER_GENES) - 1)
-        deltas = iter([0.05, *zeroes, -0.05, *zeroes])
-        monkeypatch.setattr(main.random, "uniform", lambda low, high: next(deltas))
+        state = {"delta": 0.05}
+        monkeypatch.setattr(main.random, "uniform", lambda low, high: state["delta"])
         cfg = SimConfig(
             scenario=ScenarioConfig(
                 world=WorldConfig(10, 10),
@@ -309,6 +323,7 @@ class TestFounderJitter:
         world = World(10, 10)
 
         main.make_creature(5, 5, world, cfg)
+        state["delta"] = -0.05
         main.make_creature(6, 5, world, cfg)
 
         first = world.get_entity(5, 5).get_component(Genome).genes[GeneNames.SPEED]
