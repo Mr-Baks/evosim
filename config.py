@@ -49,6 +49,7 @@ class ScenarioConfig:
     initial_creatures: int = 40
     creature_color: tuple[int, int, int] = (80, 120, 200)
     founder_genes: tuple[FounderGene, ...] = DEFAULT_FOUNDER_GENES
+    founder_genes_jitter: float = 0.1
 
 
 @dataclass(frozen=True)

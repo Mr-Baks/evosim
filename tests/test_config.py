@@ -26,6 +26,7 @@ class TestDefaults:
         assert cfg.scenario.world == WorldConfig(width=100, height=40)
         assert cfg.scenario.initial_plants == 120
         assert cfg.scenario.initial_creatures == 40
+        assert cfg.scenario.founder_genes_jitter == 0.1
         assert isinstance(cfg.balance, BalanceConfig)
 
     def test_world_size_property(self):
@@ -71,6 +72,11 @@ class TestFromDict:
         assert cfg.run.seed == 3
         assert cfg.run.ticks == RunConfig().ticks
         assert cfg.scenario == ScenarioConfig()
+
+    def test_founder_jitter_roundtrips(self):
+        cfg = SimConfig.from_dict({"scenario": {"founder_genes_jitter": 0.25}})
+        assert cfg.scenario.founder_genes_jitter == 0.25
+        assert cfg.to_dict()["scenario"]["founder_genes_jitter"] == 0.25
 
     def test_rejects_unknown_section(self):
         with pytest.raises(ValueError, match="Unknown config sections"):
@@ -123,7 +129,12 @@ class TestLoadConfig:
 
 class TestMainWiring:
     def test_founder_genes_are_applied(self):
-        cfg = SimConfig(scenario=ScenarioConfig(world=WorldConfig(10, 10)))
+        cfg = SimConfig(
+            scenario=ScenarioConfig(
+                world=WorldConfig(10, 10),
+                founder_genes_jitter=0.0,
+            )
+        )
         w = World(10, 10)
         main.make_creature(5, 5, w, cfg)
         genome = w.get_entity(5, 5).get_component(Genome)
@@ -215,3 +226,94 @@ class TestMainWiring:
         # block. Reaching this assertion means importing is safe.
         assert callable(main.main)
         assert callable(main.build_simulation)
+
+
+class TestFounderJitter:
+    def test_zero_jitter_keeps_genes_unchanged(self):
+        genes = (
+            (GeneNames.SPEED, -0.4, 0.2, 0.5),
+            (GeneNames.MATING_DRIVE, 1.0, 0.4, 1.0),
+        )
+        assert main.jitter_genes(genes, jitter=0.0) == genes
+
+    def test_same_delta_is_applied_to_both_alleles(self, monkeypatch):
+        monkeypatch.setattr(main.random, "uniform", lambda low, high: 0.05)
+        genes = ((GeneNames.SPEED, -0.4, 0.2, 0.5),)
+
+        jittered = main.jitter_genes(genes, jitter=0.1)
+
+        (name, a1, a2, dominance), = jittered
+        assert name == GeneNames.SPEED
+        assert a1 == pytest.approx(-0.35)
+        assert a2 == pytest.approx(0.25)
+        assert dominance == 0.5
+
+    @pytest.mark.parametrize(
+        ("allele", "delta", "expected"),
+        [
+            (1.0, 0.25, 0.75),
+            (1.0, -0.25, 0.75),
+            (-1.0, 0.25, -0.75),
+            (-1.0, -0.25, -0.75),
+        ],
+    )
+    def test_boundary_jitter_stays_inside_range(self, monkeypatch, allele, delta, expected):
+        monkeypatch.setattr(main.random, "uniform", lambda low, high: delta)
+        genes = ((GeneNames.SPEED, allele, allele, 0.5),)
+
+        (_, a1, a2, _), = main.jitter_genes(genes, jitter=0.25)
+
+        assert a1 == pytest.approx(expected)
+        assert a2 == pytest.approx(expected)
+        assert -1 <= a1 <= 1
+        assert -1 <= a2 <= 1
+
+    def test_make_creature_applies_jitter_but_not_to_color_genes(self, monkeypatch):
+        monkeypatch.setattr(main.random, "uniform", lambda low, high: 0.05)
+        cfg = SimConfig(
+            scenario=ScenarioConfig(
+                world=WorldConfig(10, 10),
+                founder_genes_jitter=0.1,
+            )
+        )
+        world = World(10, 10)
+
+        main.make_creature(5, 5, world, cfg)
+        genome = world.get_entity(5, 5).get_component(Genome)
+
+        speed = genome.genes[GeneNames.SPEED]
+        assert speed.allele1 == pytest.approx(-0.55)
+        assert speed.allele2 == pytest.approx(-0.55)
+
+        # MATING_DRIVE starts at the upper bound, so the positive delta is
+        # reflected back into the valid interval.
+        mating = genome.genes[GeneNames.MATING_DRIVE]
+        assert mating.allele1 == pytest.approx(0.95)
+        assert mating.allele2 == pytest.approx(0.95)
+
+        # Color genes are appended after jitter and must stay exact.
+        color_r = genome.genes[GeneNames.COLOR_R]
+        assert color_r.allele1 == pytest.approx((80 - 128) / 128)
+        assert color_r.allele2 == pytest.approx((80 - 128) / 128)
+
+    def test_each_founder_is_jittered_independently(self, monkeypatch):
+        zeroes = [0.0] * (len(DEFAULT_FOUNDER_GENES) - 1)
+        deltas = iter([0.05, *zeroes, -0.05, *zeroes])
+        monkeypatch.setattr(main.random, "uniform", lambda low, high: next(deltas))
+        cfg = SimConfig(
+            scenario=ScenarioConfig(
+                world=WorldConfig(10, 10),
+                founder_genes_jitter=0.1,
+            )
+        )
+        world = World(10, 10)
+
+        main.make_creature(5, 5, world, cfg)
+        main.make_creature(6, 5, world, cfg)
+
+        first = world.get_entity(5, 5).get_component(Genome).genes[GeneNames.SPEED]
+        second = world.get_entity(6, 5).get_component(Genome).genes[GeneNames.SPEED]
+
+        assert first.allele1 == pytest.approx(-0.55)
+        assert second.allele1 == pytest.approx(-0.65)
+        assert first.allele1 != second.allele1

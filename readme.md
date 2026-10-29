@@ -87,9 +87,10 @@ The console displays a grid:
 - `D` – corpse (food)
 - `.` – empty cell
 
-Colors are rendered from `Render.color`: founders use
-`scenario.creature_color`, while offspring use
-`traits_for(child_genome).color`. The demo runs for 1200 ticks and prints
+Colors are rendered from `Render.color`: founder color genes are derived from
+`scenario.creature_color`, and `create_entity_from_genome` derives the rendered
+color from the genome, so founders and offspring use the same
+`traits_for(genome).color` path. The demo runs for 1200 ticks and prints
 per-tick stats (population, food, average speed). The `logs/` directory
 receives text dumps; close the terminal to stop.
 
@@ -527,7 +528,7 @@ by how often they change:
 | Layer | Purpose | Example fields |
 |-------|---------|----------------|
 | `RunConfig` | a single run | `seed`, `ticks`, `headless`, `tickspeed`, `fps`, `record_every`, `output_dir` |
-| `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes` |
+| `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes`, `founder_genes_jitter` |
 | `BalanceConfig` | world "physics", read by systems via `world.balance` | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
 
 Precedence: **dataclass defaults → TOML file → CLI flags**. The CLI currently
@@ -541,6 +542,7 @@ cfg = load_config("scenario.toml")   # or load_config() for defaults
 cfg.run.seed                 # 1
 cfg.scenario.world.size      # (100, 40)
 cfg.scenario.founder_genes   # ((name, allele1, allele2, dominance), ...)
+cfg.scenario.founder_genes_jitter  # 0.1 by default
 ```
 
 ```bash
@@ -592,16 +594,29 @@ sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome
 
 ### Founder genome
 
-The founder is `scenario.founder_genes`, a tuple of
-`(name, allele1, allele2, dominance)` — an exact, configurable reproduction of
-the genome that used to be hard-coded in `make_creature`. `dominance` is the
-weight described above (`0.5` additive, `1` complete dominance of the larger
-allele); all founders use the same weight for a given gene. Three color genes
-are appended after `founder_genes`, derived from `scenario.creature_color`;
-both alleles are set to the target value, so the derived colour matches the
-requested colour. Founders' `Render.color` is also set directly to
-`creature_color`; offspring use the derived traits. `make_food()` spawns a
-standalone `Eatable`; `make_plant()` spawns a `Plant` with a random
+The founder baseline is `scenario.founder_genes`, a tuple of
+`(name, allele1, allele2, dominance)`. `dominance` is the weight described
+above (`0.5` additive, `1` complete dominance of the larger allele); all
+founders use the same weight for a given gene.
+
+Each call to `make_creature()` creates its own founder genome. For every
+locus it draws one delta from `U(-founder_genes_jitter, +founder_genes_jitter)`
+and adds that same delta to both alleles. This creates standing variation
+between founders while preserving each founder's heterozygosity
+(`allele1 - allele2`) and the mean phenotype. If an allele would leave
+`[-1, 1]`, the delta is applied in the opposite direction; alleles already at
+a bound therefore move inward. The default jitter is `0.1`. Set
+`scenario.founder_genes_jitter = 0.0` to create genetically identical
+founders. The current implementation still draws one zero-width sample per
+locus at `0.0`, so the RNG stream is not identical to pre-jitter versions; an
+early return from `jitter_genes()` would restore exact reproducibility.
+
+Three color genes are appended after jitter, derived from
+`scenario.creature_color`; they are not jittered, so every founder has the
+requested colour. `create_entity_from_genome` builds the full creature and
+derives `Render.color`, `Movable.speed`, `Breedable.fertility` and
+`Vision.radius` from the resulting genome. `make_food()` spawns a standalone
+`Eatable`; `make_plant()` spawns a `Plant` with a random
 `fructify_threshold` in `[plant_fructify_min, plant_fructify_max]`.
 `make_creature()`, `make_food()`, and `make_plant()` place the new entity in
 the world and return `None`; use `world.get_entity(x, y)` if you need it.
@@ -663,6 +678,9 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   the same `traits.py` formulas.
 - `tests/test_lineage.py` – founders start at generation `0`, children get
   `max(parents) + 1`, parents' eids are recorded, and lineage is deterministic.
+- `tests/test_config.py` – config validation/roundtrip, genome-derived founder
+  components, and founder jitter (same delta per locus, colour genes excluded,
+  boundary handling, independent founders).
 
 ## Current Limitations & Roadmap
 
@@ -679,8 +697,11 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   behaviour or generation summaries, and there is no condition × seed matrix
   runner yet. Subscribe to `BirthEvent` / `DeathEvent` or add `RunLogger`
   queries for experiment-specific data.
-- **Founder variation** – all founders share the same `founder_genes`; there is
-  no standing genetic variation unless you customise `make_creature`.
+- **Founder variation** – `founder_genes` is the shared baseline, but by
+  default each founder receives independent per-locus jitter
+  (`founder_genes_jitter=0.1`). Set it to `0.0` for identical founders. Genes
+  starting exactly at `-1` or `+1` jitter inward, so their founder mean is
+  biased away from the bound (notably `MATING_DRIVE=1.0`).
 - **Dominance model** – one directional weight per gene; it is not
   allele-specific, cannot represent over/underdominance, and is not the
   standard `h` coefficient. Old TOML configs that used `true` / `false` must be

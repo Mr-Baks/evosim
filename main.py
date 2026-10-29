@@ -5,7 +5,7 @@ side effects, so experiment runners and tests can reuse build_simulation.
 """
 import random
 from commands import *
-from config import SimConfig, load_config
+from config import SimConfig, load_config, FounderGene
 from entity import *
 from event_bus import BirthEvent, DeathEvent, EatEvent, Event, EventBus, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
 from genome import Gene, GeneNames, Genome
@@ -14,10 +14,30 @@ from simulation import Simulation
 from systems import *
 from world import World
 
+
+def jitter_genes(genes: tuple[FounderGene], jitter: float = 0.1) -> tuple[FounderGene]:
+    jittered = []
+    for gene in genes:
+        delta = random.uniform(-jitter, jitter)
+        name, a1, a2, dominance = gene
+
+        if abs(a1 + delta) > 1:
+            a1 -= delta
+        else:
+            a1 += delta
+
+        if abs(a2 + delta) > 1:
+            a2 -= delta
+        else:
+            a2 += delta
+
+        jittered.append((name, a1, a2, dominance))
+    return tuple(jittered)
+
 def make_creature(x, y, world: World, cfg: SimConfig, color=None):
     color = color or cfg.scenario.creature_color
-
-    genes = [Gene(name, a1, a2, dominance=dom) for name, a1, a2, dom in cfg.scenario.founder_genes]
+    founder_genes = jitter_genes(cfg.scenario.founder_genes, jitter=cfg.scenario.founder_genes_jitter)
+    genes = [Gene(name, a1, a2, dominance=dom) for name, a1, a2, dom in founder_genes]
     genes.append(Gene(GeneNames.COLOR_R, (color[0] - 128) / 128, (color[0] - 128) / 128, dominance=0.5))
     genes.append(Gene(GeneNames.COLOR_G, (color[1] - 128) / 128, (color[1] - 128) / 128, dominance=0.5))
     genes.append(Gene(GeneNames.COLOR_B, (color[2] - 128) / 128, (color[2] - 128) / 128, dominance=0.5))
