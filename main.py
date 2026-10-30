@@ -70,12 +70,25 @@ def tick_stats(sim: Simulation):
     print(f'creatures: {creatures_amount} | food: {food_amount} | avg speed: {avg_speed}')
 
 def _scatter(sim: Simulation, count: int, make):
+    if count < 0:
+        raise ValueError("Entity count must be non-negative")
+    if count == 0:
+        return
+
     world = sim.world
-    for _ in range(count):
-        x = random.randint(0, world.width - 1)
-        y = random.randint(0, world.height - 1)
-        if not world.get_entity(x, y):
-            make(x, y)
+    free_cells = []
+    for y in range(world.height):
+        for x in range(world.width):
+            if world.get_entity(x, y) is None:
+                free_cells.append((x, y))
+
+    if count > len(free_cells):
+        raise ValueError(
+            f"Cannot place {count} entities: only {len(free_cells)} free cells are available"
+        )
+
+    for x, y in random.sample(free_cells, count):
+        make(x, y)
 
 def _mean(values):
     return sum(values) / len(values) if values else 0.0
