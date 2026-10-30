@@ -184,7 +184,7 @@ class World:
         self._column_cache[radius] = [tuple(column) for column in columns]
         return self._column_cache[radius]
 
-    def get_neighbours(self, entity: Entity, radius=1) -> list[Entity]:
+    def get_neighbours(self, entity: Entity, radius=1, sort: bool = True) -> list[Entity]:
         neighbours = []
         x, y = entity.x, entity.y
 
@@ -196,7 +196,7 @@ class World:
                     if other:
                         neighbours.append(other)
 
-        return sorted(neighbours, key=lambda e: e.eid)
+        return sorted(neighbours, key=lambda e: e.eid) if sort else neighbours
 
     def count_near(self, x: int, y: int, condition: Callable[[Entity], bool], radius: int = 3, normed: bool = False) -> float:
         count = 0
