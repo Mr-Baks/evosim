@@ -44,6 +44,7 @@ class Breedable(Component):
 class Vision(Component):
     radius: int = 4
     visibles: list[Entity] = field(default_factory=list)
+    cache: dict[str, list[Entity]] | None = None
 
 @dataclass 
 class Plant(Component):

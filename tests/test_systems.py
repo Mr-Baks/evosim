@@ -94,6 +94,41 @@ class TestVisionSystem:
         
         assert e not in e.get_component(Vision).visibles
 
+    def test_vision_system_populates_category_cache_without_duplicates(self):
+        e = Entity().add_component(Vision(radius=3)).add_component(Movable())
+        w = World(10, 10)
+        w.place_entity(e, 5, 5)
+
+        creature = Entity().add_component(Movable()).add_component(Breedable())
+        fruit = Entity().add_component(Eatable(nutrition=10))
+        plant = Entity().add_component(Plant())
+        w.place_entity(creature, 6, 5)
+        w.place_entity(fruit, 5, 6)
+        w.place_entity(plant, 4, 5)
+
+        vision_system({e}, w)
+
+        vision = e.get_component(Vision)
+        assert len(vision.visibles) == 3
+        assert set(vision.visibles) == {creature, fruit, plant}
+        assert vision.cache['creatures'] == [creature]
+        assert vision.cache['partners'] == [creature]
+        assert vision.cache['foods'] == [fruit]
+        assert vision.cache['plants'] == [plant]
+        assert visible_counts(vision) == (1, 1, 1, 1)
+
+    def test_vision_system_resets_previous_visibles(self):
+        e = Entity().add_component(Vision(radius=2)).add_component(Movable())
+        w = World(10, 10)
+        w.place_entity(e, 5, 5)
+        target = Entity().add_component(Movable())
+        w.place_entity(target, 6, 5)
+
+        vision_system({e}, w)
+        vision_system({e}, w)
+
+        assert e.get_component(Vision).visibles == [target]
+
 
 class TestBiochemistrySystem:
     # Drains are gene-derived: metabolism * speed**2 scaled, then weighted by
@@ -188,6 +223,59 @@ class TestBiochemistrySystem:
         
         bio = e.get_component(Biochemistry)
         assert bio.energy == 100
+
+    def test_biochemistry_reuses_vision_cache_for_crowd_count(self, monkeypatch):
+        e = (Entity()
+             .add_component(Biochemistry())
+             .add_component(CommandQueue())
+             .add_component(Breedable())
+             .add_component(Movable())
+             .add_component(Vision(radius=10))
+             .add_component(default_genes()))
+        w = World(20, 20)
+        w.place_entity(e, 10, 10)
+        for x, y in [(12, 10), (13, 10), (14, 10), (11, 12)]:
+            w.place_entity(Entity().add_component(Movable()), x, y)
+
+        vision_system({e}, w)
+
+        def unexpected(*args, **kwargs):
+            raise AssertionError('crowd count should use Vision.cache')
+
+        monkeypatch.setattr(w, 'count_components_near', unexpected)
+        biochemistry_system({e}, w)
+
+        bio = e.get_component(Biochemistry)
+        balance = w.balance
+        normalized = (4 - balance.crowd_count_threshold) / (balance.max_crowd_count - balance.crowd_count_threshold)
+        crowd_penalty = min(normalized, 1.0) * balance.max_crowd_penalty_factor
+        expected = traits_for(e.get_component(Genome)).effective_fertility(bio.vitality) * (1 - crowd_penalty)
+        assert e.get_component(Breedable).fertility == pytest.approx(expected)
+
+    def test_biochemistry_falls_back_when_crowd_radius_exceeds_vision(self):
+        e = (Entity()
+             .add_component(Biochemistry())
+             .add_component(CommandQueue())
+             .add_component(Breedable())
+             .add_component(Movable())
+             .add_component(Vision(radius=1))
+             .add_component(default_genes()))
+        w = World(20, 20)
+        w.place_entity(e, 10, 10)
+        for x, y in [(13, 10), (12, 12), (10, 14), (7, 10)]:
+            w.place_entity(Entity().add_component(Movable()), x, y)
+
+        vision_system({e}, w)
+        assert e.get_component(Vision).cache['creatures'] == []
+
+        biochemistry_system({e}, w)
+
+        bio = e.get_component(Biochemistry)
+        balance = w.balance
+        normalized = (4 - balance.crowd_count_threshold) / (balance.max_crowd_count - balance.crowd_count_threshold)
+        crowd_penalty = min(normalized, 1.0) * balance.max_crowd_penalty_factor
+        expected = traits_for(e.get_component(Genome)).effective_fertility(bio.vitality) * (1 - crowd_penalty)
+        assert e.get_component(Breedable).fertility == pytest.approx(expected)
 
 
 class TestPlantSystem:

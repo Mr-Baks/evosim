@@ -14,7 +14,8 @@ heredity-based genetics.
   birth/death notifications decoupled from commands and systems
 - **A\* pathfinding** – multi-step movement with obstacle avoidance and
   automatic replanning
-- **Vision system** – each creature perceives nearby entities within a radius
+- **Vision system** – each creature perceives nearby entities within a radius;
+  one scan rebuilds `visibles` and fills category caches for decision-making
 - **Biochemistry** – energy, hunger and health with metabolism, regeneration,
   starvation and death (leaving a corpse)
 - **Senescence** – accumulated wear with age lowers vitality, max health and
@@ -42,7 +43,7 @@ heredity-based genetics.
 Entity
   ├── Movable       (speed, movement_accumulator)
   ├── Biochemistry  (energy, hunger, health, max_health, vitality, age)
-  ├── Vision        (radius, visibles)
+  ├── Vision        (radius, visibles, cache)
   ├── CommandQueue  (queue, running)
   ├── State         (current, states)
   ├── Breedable     (fertility, cooldown)
@@ -52,7 +53,7 @@ Entity
   └── … (Eatable, Plant, etc.)
 
 Systems registered in main.py (higher priority runs first):
-  - vision_system        – populates Vision.visibles                  (priority 200)
+  - vision_system        – rebuilds Vision.visibles and its category cache (priority 200)
   - decision_system      – utility-based AI, pushes commands         (priority 100)
   - plant_system         – grows plants, spawns fruit                 (priority 75)
   - biochemistry_system  – ageing/wear, metabolism, regeneration, death (priority 70)
@@ -329,7 +330,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `Biochemistry` | `energy: float`, `hunger: float`, `health: float`, `max_health: float`, `vitality: float`, `age: float` | Vital stats + ageing |
 | `Eatable` | `nutrition: int` | Food value |
 | `Breedable` | `fertility: float`, `cooldown: int` | Reproduction (`fertility` defaults to `1`; scaled by vitality each tick) |
-| `Vision` | `radius: int`, `visibles: list[Entity]` | Perception |
+| `Vision` | `radius: int`, `visibles: list[Entity]`, `cache: dict[str, list[Entity]] \| None` | Perception and per-tick category cache |
 | `CommandQueue` | `queue: list[Command]`, `running: Command \| None` | Pending commands and the currently running command |
 | `Plant` | `energy: int`, `energy_increase: int`, `fructify_threshold: int`, `fruit_nutrition: int` | Plant growth |
 | `Genome` | `genes: dict[str, Gene]` | Heritable genetic data |
@@ -339,12 +340,24 @@ def _find_path(self, world, start, ignore_entity=None):
 
 | System | Required Components | Priority | Description |
 |--------|---------------------|----------|-------------|
-| `vision_system` | `Vision` | 200 | Populates `Vision.visibles` with neighbours in radius |
+| `vision_system` | `Vision` | 200 | Rebuilds `Vision.visibles` and `Vision.cache` (`creatures`, `partners`, `foods`, `plants`) in one radius scan |
 | `decision_system` | `CommandQueue`, `State`, `Biochemistry`, `Vision`, `Genome` | 100 | Utility-based AI; the function also skips entities lacking `Biochemistry`/`Vision`/`Genome` |
 | `plant_system` | `Plant` | 75 | Grows energy (cap 150) and drops fruit when above `fructify_threshold` |
-| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`; also expects `Genome`) |
+| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`; also expects `Genome`). Reuses `Vision.cache['creatures']` for crowd pressure when `crowd_radius <= vision.radius`, otherwise falls back to a grid count |
 | `command_system` | `CommandQueue` | 50 | Picks next ready command and executes the running one |
 | `logging_system` | `CommandQueue`, `State`, `Biochemistry`, `Vision`, `Genome` | 0 | Writes per-entity state and utilities to `logs/last_tick.txt` |
+
+`vision_system` always replaces `visibles` with a fresh, de-duplicated list for
+the current tick. It also builds `Vision.cache` with four keys:
+`creatures` (`Movable`), `partners` (`Breedable`), `foods` (`Eatable`) and
+`plants` (`Plant`). `visible_counts()` reads those lists; if `cache` is `None`
+(for example, a manually constructed `Vision`), it falls back to scanning
+`visibles`. `decision_system` uses the cached food/partner lists, and
+`biochemistry_system` reuses the cached creature list for crowd pressure when
+the crowd radius fits inside vision. Missing `Vision` is supported by the
+biochemistry fallback grid count. The vision scan itself is unsorted; food and
+partner candidates are sorted by `(Manhattan distance, eid)` so equal-distance
+ties remain deterministic and match the old eid-sorted behaviour.
 
 ## Decision Logic (utility-based)
 

@@ -28,8 +28,21 @@ def command_system(entities: set[Entity], world: World):
 
 def vision_system(entities: set[Entity], world: World):
     for e in entities:
-        vision = e.get_component(Vision)
-        vision.visibles = world.get_neighbours(e, radius=vision.radius)
+        vision: Vision = e.get_component(Vision)
+        vision.visibles = []
+        vision.cache = {'creatures': [], 'partners': [], 'foods': [], 'plants': []}
+
+        for ve in world.get_neighbours(e, radius=vision.radius, sort=False):
+            vision.visibles.append(ve)
+            components = ve.components
+            if Movable in components:
+                vision.cache['creatures'].append(ve)
+            if Breedable in components:
+                vision.cache['partners'].append(ve)
+            if Eatable in components:
+                vision.cache['foods'].append(ve)
+            if Plant in components:
+                vision.cache['plants'].append(ve)
 
 def biochemistry_system(entities: set[Entity], world: World):
     for e in entities:
@@ -37,9 +50,18 @@ def biochemistry_system(entities: set[Entity], world: World):
         breedable: Breedable = e.get_component(Breedable)
         queue = e.get_component(CommandQueue)
         genome: Genome = e.get_component(Genome)
+        vision: Vision = e.get_component(Vision)
         traits = traits_for(genome)
 
-        creatures_count = world.count_near(e.x, e.y, lambda e: e.has_component(Movable), radius=world.balance.crowd_radius)
+        if vision and vision.cache is not None and world.balance.crowd_radius <= vision.radius:
+            r2 = world.balance.crowd_radius ** 2
+            creatures_count = 0
+            for ve in vision.cache['creatures']:
+                if (ve.x - e.x) ** 2 + (ve.y - e.y) ** 2 <= r2:
+                    creatures_count += 1
+        else:
+            creatures_count = world.count_components_near(e.x, e.y, (Movable,), radius=world.balance.crowd_radius, exclude=e)[0]
+
         if creatures_count >= world.balance.crowd_count_threshold:
             normalized = (creatures_count - world.balance.crowd_count_threshold) / (world.balance.max_crowd_count - world.balance.crowd_count_threshold)
             crowd_penalty = min(normalized, 1.0) * world.balance.max_crowd_penalty_factor
@@ -141,6 +163,14 @@ def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plan
     return max(0, utility)
 
 def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
+    if vision.cache is not None:
+        food = len(vision.cache['foods'])
+        creatures = len(vision.cache['creatures'])
+        partners = len(vision.cache['partners'])
+        plants = len(vision.cache['plants'])
+
+        return food, creatures, partners, plants
+
     food = creatures = partners = plants = 0
     for ve in vision.visibles:
         if ve.has_component(Eatable):
@@ -151,6 +181,7 @@ def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
             partners += 1
         if ve.has_component(Plant):
             plants += 1
+
     return food, creatures, partners, plants
 
 def logging_system(entities: set[Entity], world: World):
@@ -176,7 +207,7 @@ def logging_system(entities: set[Entity], world: World):
         log += f'Entity {i} at {e.x}, {e.y}:\n'
         log += f'   Running command: {queue.running.target_state if queue.running else None} | queue\'s len: {len(queue.queue)}\n'
         log += f'   Current state: {state.current} | states: {state.states}\n'
-        log += f'   Energy: {bio.energy:.2f} | hunger: {bio.hunger:.2f} | helth: {bio.health:.2f} | age: {bio.age:.2f} | vitality: {bio.vitality:.2f}\n'
+        log += f'   Energy: {bio.energy:.2f} | hunger: {bio.hunger:.2f} | health: {bio.health:.2f} | age: {bio.age:.2f} | vitality: {bio.vitality:.2f}\n'
         log += f'   Utilities: {uts}\n'
 
     with open('logs/last_tick.txt', 'w+') as l:
@@ -206,9 +237,12 @@ def decision_system(entities: set[Entity], world: World):
         if action in state.states: 
             continue
         elif action == 'eat':
-            food_candidates = [ve for ve in vision.visibles if ve.has_component(Eatable)]
+            if vision.cache is not None:
+                food_candidates = list(vision.cache['foods'])
+            else:
+                food_candidates = [ve for ve in vision.visibles if ve.has_component(Eatable)]
             if food_candidates:
-                food_candidates.sort(key=lambda f: abs(e.x - f.x) + abs(e.y - f.y))
+                food_candidates.sort(key=lambda f: (abs(e.x - f.x) + abs(e.y - f.y), f.eid))
                 for f in food_candidates:
                     free_cell = world.get_free_cell_near(f)
                     if free_cell and random.random() > world.balance.eat_reconsider_chance:
@@ -228,9 +262,12 @@ def decision_system(entities: set[Entity], world: World):
                 ticks_to_sleep = round((world.balance.sleep_target_energy - bio.energy) / world.balance.sleep_energy_increase)
             push_command(e, world, SleepCommand(emergency=10, ticks_to_sleep=ticks_to_sleep, energy_increase=world.balance.sleep_energy_increase, target_state=action))
         elif action == 'mating': 
-            partners = [ve for ve in vision.visibles if ve.has_component(Breedable) and ve is not e]
+            if vision.cache is not None:
+                partners = list(vision.cache['partners'])
+            else:
+                partners = [ve for ve in vision.visibles if ve.has_component(Breedable) and ve is not e]
             if partners:
-                partners.sort(key=lambda p: abs(e.x - p.x) + abs(e.y - p.y))
+                partners.sort(key=lambda p: (abs(e.x - p.x) + abs(e.y - p.y), p.eid))
                 for p in partners:
                     free_cell = world.get_free_cell_near(p)
                     if free_cell:
@@ -243,4 +280,3 @@ def decision_system(entities: set[Entity], world: World):
                         break
         elif 'idle' not in state.states:
             push_command(e, world, WanderCommand(radius=vision.radius, target_state=action))
-
