@@ -5,6 +5,12 @@ MAX_HEALTH = 100
 HUNGER_COST_SCALE = 710
 
 @dataclass(frozen=True)
+class Metabolism:
+    metabolic: float
+    digestion: float
+    cooldown_modifier: float
+
+@dataclass(frozen=True)
 class Speed:
     locomotion: float
     metabolic: float
@@ -27,7 +33,7 @@ class Vision:
 
 @dataclass(frozen=True)
 class Traits:
-    metabolism: float
+    metabolism: Metabolism
     speed: Speed
     fertility: float
     senescence_shape: float
@@ -59,39 +65,52 @@ class Traits:
         return vitality * MAX_HEALTH
 
     def energy_drain(self, vitality: float) -> float:
-        """Energy spent per awake tick; frailer bodies burn more."""
-        return self.metabolism * self.speed.metabolic ** 2 * (2 - vitality) * self.vision.metabolic
+        """Energy spent per awake tick; high metabolism costs more."""
+        return ((self.metabolism.metabolic) ** 2) * (0.5 + 0.5 * self.metabolism.digestion) * self.speed.metabolic * (2 - vitality) * self.vision.metabolic
 
     def hunger_drain(self) -> float:
-        """Hunger spent per tick; longer-lived bodies burn more."""
-        return self.metabolism * self.speed.metabolic ** 2 * (self.wear_resistance.aging / HUNGER_COST_SCALE) * self.vision.metabolic
+        """Hunger spent per tick; fast, long-lived bodies need more fuel."""
+        return (self.wear_resistance.aging / HUNGER_COST_SCALE) * (self.metabolism.metabolic / 0.5) * self.speed.metabolic * 0.5 * self.vision.metabolic
+
+    def hunger_gain(self, nutrition: int) -> float:
+        """Satiety restored by food, scaled by digestive efficiency."""
+        return self.metabolism.digestion * nutrition
 
     def effective_fertility(self, vitality: float) -> float:
         """Fertility after the vitality gate and the senescence-shape penalty."""
         return self.fertility * min(1.0, vitality * 2) * (1 - self.senescence_shape / 3)
 
+    def additional_cooldown(self) -> int:
+        """Extra mating cooldown after the global base."""
+        return round(self.wear_resistance.cooldown * (1 - 0.5 * self.metabolism.cooldown_modifier))
+
     def regeneration_gain(self, vitality: float) -> float:
         """Health regained per regeneration activation."""
-        return self.regeneration_increase * self.metabolism * vitality
+        return self.regeneration_increase * self.metabolism.metabolic * vitality
 
     def regeneration_cost(self) -> float:
         """Energy (and equally hunger) spent per regeneration activation."""
-        return self.regeneration_increase ** 2 * self.metabolism / 2
+        return self.regeneration_increase ** 2 * self.metabolism.metabolic / 2
 
 def derive(genome: Genome) -> Traits:
     """Compute all phenotype effects from a genome."""
     gp = genome.get_phenotype
+
     return Traits(
-        metabolism=gp(GeneNames.METABOLISM, (0.1, 2), log=True),
+        metabolism=Metabolism(
+            metabolic=gp(GeneNames.METABOLISM, (0.1, 2.5), default=0.5, log=True),
+            digestion=gp(GeneNames.METABOLISM, (0.5, 1.5), default=1.0),
+            cooldown_modifier=gp(GeneNames.METABOLISM, (0.001, 0.9), default=0.0, log=True),
+        ),
         speed=Speed(
-            locomotion=gp(GeneNames.SPEED, (0, 5)),
-            metabolic=gp(GeneNames.SPEED, (1, 3)),
+            locomotion=gp(GeneNames.SPEED, (0, 5), default=2.5),
+            metabolic=gp(GeneNames.SPEED, (1, 3), default=2.0),
         ),
         fertility=gp(GeneNames.FERTILITY, (0, 1)),
         senescence_shape=gp(GeneNames.SENESCENCE_SHAPE, (1, 3)),
         wear_resistance=WearResistance(
-            aging=gp(GeneNames.WEAR_RESISTANCE, (180, 700), log=True),
-            cooldown=gp(GeneNames.WEAR_RESISTANCE, (0.001, 300), log=True),
+            aging=gp(GeneNames.WEAR_RESISTANCE, (180, 700), default=355.0, log=True),
+            cooldown=gp(GeneNames.WEAR_RESISTANCE, (0.001, 300), default=100.0, log=True),
         ),
         regeneration_threshold=gp(GeneNames.REGENERATION_THRESHOLD, (0, 1)),
         regeneration_increase=gp(GeneNames.REGENERATION_INCREASE, (1, 5)),

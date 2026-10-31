@@ -401,9 +401,9 @@ class TestMateCommand:
         cmd.execute(e1, w)
 
         assert cmd.status == CommandStatus.COMPLETED
-        # Cooldown is now derived from the parent's wear_resistance gene
-        # (traits.WearResistance.cooldown): default_genes -> 100 + 300.
-        expected_cooldown = 100 + traits_for(e1.get_component(Genome)).wear_resistance.cooldown
+        # Cooldown is derived from wear_resistance and the metabolic
+        # cooldown modifier: default_genes -> 100 + 296.
+        expected_cooldown = 100 + traits_for(e1.get_component(Genome)).additional_cooldown()
         assert e1.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
         assert e2.get_component(Breedable).cooldown == pytest.approx(expected_cooldown)
 

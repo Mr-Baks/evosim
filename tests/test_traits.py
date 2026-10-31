@@ -34,7 +34,9 @@ def genome_at(value: float) -> Genome:
 class TestDeriveBounds:
     def test_minus_one_gives_lower_bounds(self):
         t = derive(genome_at(-1.0))
-        assert t.metabolism == pytest.approx(0.1)
+        assert t.metabolism.metabolic == pytest.approx(0.1)
+        assert t.metabolism.digestion == pytest.approx(0.5)
+        assert t.metabolism.cooldown_modifier == pytest.approx(0.001)
         assert t.speed.locomotion == pytest.approx(0.0)
         assert t.speed.metabolic == pytest.approx(1.0)
         assert t.fertility == pytest.approx(0.0)
@@ -53,7 +55,9 @@ class TestDeriveBounds:
 
     def test_zero_gives_midpoints(self):
         t = derive(genome_at(0.0))
-        assert t.metabolism == pytest.approx((0.1 * 2) ** 0.5)
+        assert t.metabolism.metabolic == pytest.approx(0.5)
+        assert t.metabolism.digestion == pytest.approx(1.0)
+        assert t.metabolism.cooldown_modifier == pytest.approx(0.03)
         assert t.speed.locomotion == pytest.approx(2.5)
         assert t.speed.metabolic == pytest.approx(2.0)
         assert t.fertility == pytest.approx(0.5)
@@ -72,7 +76,9 @@ class TestDeriveBounds:
 
     def test_plus_one_gives_upper_bounds(self):
         t = derive(genome_at(1.0))
-        assert t.metabolism == pytest.approx(2.0)
+        assert t.metabolism.metabolic == pytest.approx(2.5)
+        assert t.metabolism.digestion == pytest.approx(1.5)
+        assert t.metabolism.cooldown_modifier == pytest.approx(0.9)
         assert t.speed.locomotion == pytest.approx(5.0)
         assert t.speed.metabolic == pytest.approx(3.0)
         assert t.fertility == pytest.approx(1.0)
@@ -96,6 +102,14 @@ class TestDeriveBounds:
         assert t.vision.radius == pytest.approx(7.5)
         assert t.vision.metabolic == pytest.approx(1.2)
 
+    def test_missing_metabolism_gene_uses_defaults(self):
+        genes = [Gene(name, 0.0, 0.0) for name in ALL_GENES if name != GeneNames.METABOLISM]
+        t = derive(Genome(genes))
+
+        assert t.metabolism.metabolic == pytest.approx(0.5)
+        assert t.metabolism.digestion == pytest.approx(1.0)
+        assert t.metabolism.cooldown_modifier == pytest.approx(0.0)
+
 
 class TestPleiotropy:
     def test_one_gene_drives_two_speed_effects(self):
@@ -107,6 +121,12 @@ class TestPleiotropy:
         t = derive(genome_at(0.5))
         assert t.wear_resistance.aging == pytest.approx(180 * (700 / 180) ** 0.75)
         assert t.wear_resistance.cooldown == pytest.approx(0.001 * (300 / 0.001) ** 0.75)
+
+    def test_metabolism_gene_drives_three_effects(self):
+        t = derive(genome_at(0.5))
+        assert t.metabolism.metabolic == pytest.approx(0.1 * 25 ** 0.75)
+        assert t.metabolism.digestion == pytest.approx(1.25)
+        assert t.metabolism.cooldown_modifier == pytest.approx(0.001 * 900 ** 0.75)
 
 
 class TestTraitsFor:
@@ -138,8 +158,20 @@ class TestFormulas:
 
     def setup_method(self):
         self.t = derive(genome_at(0.0))
-        self.lifespan = self.t.wear_resistance.aging            # sqrt(180 * 700)
-        self.base = self.t.metabolism * self.t.speed.metabolic ** 2 * self.t.vision.metabolic
+        self.lifespan = self.t.wear_resistance.aging
+        self.base = (
+            self.t.metabolism.metabolic ** 2
+            * (0.5 + 0.5 * self.t.metabolism.digestion)
+            * self.t.speed.metabolic
+            * self.t.vision.metabolic
+        )
+        self.hunger_base = (
+            (self.lifespan / 710)
+            * (self.t.metabolism.metabolic / 0.5)
+            * self.t.speed.metabolic
+            * 0.5
+            * self.t.vision.metabolic
+        )
 
     def test_wear_saturates_at_one(self):
         assert self.t.wear(0) == pytest.approx(0.0)
@@ -163,8 +195,21 @@ class TestFormulas:
         assert self.t.energy_drain(1.0) == pytest.approx(self.base * 1.0)
         assert self.t.energy_drain(0.0) == pytest.approx(self.base * 2.0)
 
+    def test_digestion_trades_satiety_for_maintenance(self):
+        efficient = derive(genome_at(1.0))
+        inefficient = derive(genome_at(-1.0))
+        assert efficient.hunger_gain(20) == pytest.approx(30.0)
+        assert inefficient.hunger_gain(20) == pytest.approx(10.0)
+        assert efficient.energy_drain(1.0) > inefficient.energy_drain(1.0)
+
+    def test_additional_cooldown_scales_with_metabolism(self):
+        fast = derive(genome_at(1.0))
+        slow = derive(genome_at(-1.0))
+        assert fast.additional_cooldown() == 165
+        assert slow.additional_cooldown() == 0
+
     def test_hunger_drain_scales_with_lifespan(self):
-        assert self.t.hunger_drain() == pytest.approx(self.base * self.lifespan / 710)
+        assert self.t.hunger_drain() == pytest.approx(self.hunger_base)
 
     def test_effective_fertility_applies_gate_and_shape(self):
         shape = 1 - self.t.senescence_shape / 3

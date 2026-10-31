@@ -2,6 +2,8 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Optional
 from entity import Entity, Biochemistry
+from genome import Genome
+from traits import traits_for
 
 @dataclass
 class Event(ABC):
@@ -64,7 +66,11 @@ def on_eat(event: EatEvent):
     """Restores hunger when an entity eats"""
     bio = event.source.get_component(Biochemistry)
     if bio:
-        bio.hunger = min(event.nutrition + bio.hunger, 200)
+        if event.source.has_component(Genome):
+            gain = traits_for(event.source.get_component(Genome)).hunger_gain(event.nutrition)
+        else:
+            gain = event.nutrition
+        bio.hunger = min(gain + bio.hunger, 200)
 
 @dataclass
 class BirthEvent(Event):

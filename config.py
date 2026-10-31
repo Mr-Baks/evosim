@@ -47,7 +47,7 @@ class ScenarioConfig:
     name: str = "baseline"
     world: WorldConfig = field(default_factory=WorldConfig)
     initial_plants: int = 120
-    initial_creatures: int = 40
+    initial_creatures: int = 100
     creature_color: tuple[int, int, int] = (80, 120, 200)
     founder_genes: tuple[FounderGene, ...] = DEFAULT_FOUNDER_GENES
     founder_genes_jitter: float = 0.0
@@ -56,7 +56,7 @@ class ScenarioConfig:
 @dataclass(frozen=True)
 class BalanceConfig:
     """World "physics": parameters that shape population dynamics."""
-    plant_energy_increase: int = 2
+    plant_energy_increase: float = 2
     plant_energy_cap: int = 150
     plant_fructify_min: int = 70
     plant_fructify_max: int = 90
@@ -65,6 +65,8 @@ class BalanceConfig:
     corpse_nutrition: int = 50
     
     health_decay: float = 1.0
+    metabolic_cost_scale: float = 1.0
+    hunger_cost_scale: float = 1.0
     regeneration_energy_min: float = 60.0
     regeneration_hunger_min: float = 60.0
     

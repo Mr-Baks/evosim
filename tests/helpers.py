@@ -18,12 +18,15 @@ def default_genes(**overrides) -> Genome:
     Deriving values (same for both alleles, dominant) means the phenotype
     equals the given gene value exactly. Defaults map to:
 
-        metabolism      = 0.0   -> 0.01 * (2 / 0.01) ** 0.5      (~0.1414 energy/weight)
-        speed           = 0.0   -> (1, 3)  -> 2
+        metabolism      = 0.0   -> (0.1, 2.5) log -> 0.5 metabolic,
+                                   1.0 digestion, 0.03 cooldown modifier
+        speed           = 0.0   -> (0, 5)  -> 2.5 locomotion,
+                                   (1, 3)  -> 2 metabolic
         senescence_shape= -1.0  -> (1, 3)  -> 1   (linear wear, a = 1)
-        wear_resistance = 1.0   -> (180, 700) log -> 700 (slow ageing)
+        wear_resistance = 1.0   -> (180, 700) log -> 700 base lifespan
+                                   (modified by metabolic speed)
         regeneration_threshold = -1.0 -> (0, 1) -> 0 (regeneration disabled)
-        reproduction cooldown (MateCommand scaling (0.001, 300)) = 100 + 300 = 400
+        reproduction cooldown = 100 + round(300 * (1 - 0.5 * 0.03)) = 396
         crowd_preference = -0.5 -> aversion 0.5 (prefers open space)
         plant_appetence = 0.5 -> attraction 0.5 (prefers plant cover)
         food_appetence = 0.5 -> attraction 0.5 (prefers food when hungry)

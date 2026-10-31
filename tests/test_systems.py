@@ -131,10 +131,9 @@ class TestVisionSystem:
 
 
 class TestBiochemistrySystem:
-    # Drains are gene-derived: metabolism * speed**2 scaled, then weighted by
-    # (2 - vitality) for energy and (wear_resistance / 710) for hunger.
-    # The assertions below check properties (who drains more), not a copy of
-    # the formula, so they survive balance changes.
+    # Drains are gene-derived from the pleiotropic metabolism locus, speed,
+    # lifespan and vision. The assertions below check properties (who drains
+    # more), not a copy of the formula, so they survive balance changes.
 
     def test_biochemistry_system_energy_drain_grows_as_vitality_falls(self):
         w = World(10, 10)
@@ -173,6 +172,32 @@ class TestBiochemistrySystem:
         long_drain = 100 - long.get_component(Biochemistry).hunger
         assert short_drain > 0
         assert long_drain > short_drain
+
+    def test_biochemistry_system_applies_cost_scales(self):
+        def run(metabolic_scale: float, hunger_scale: float) -> tuple[float, float]:
+            w = World(10, 10)
+            w.balance = BalanceConfig(
+                metabolic_cost_scale=metabolic_scale,
+                hunger_cost_scale=hunger_scale,
+            )
+            e = (Entity()
+                 .add_component(Biochemistry(energy=100, hunger=100, health=100, age=0))
+                 .add_component(CommandQueue())
+                 .add_component(Movable())
+                 .add_component(default_genes()))
+            w.place_entity(e, 5, 5)
+
+            biochemistry_system({e}, w)
+
+            bio = e.get_component(Biochemistry)
+            return 100 - bio.energy, 100 - bio.hunger
+
+        base_energy, base_hunger = run(1.0, 1.0)
+        scaled_energy, scaled_hunger = run(2.0, 0.5)
+
+        assert base_energy > 0 and base_hunger > 0
+        assert scaled_energy == pytest.approx(base_energy * 2)
+        assert scaled_hunger == pytest.approx(base_hunger * 0.5)
 
     def test_biochemistry_system_hunger_zero_health_decay(self):
         e = Entity().add_component(Biochemistry(hunger=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
@@ -414,7 +439,7 @@ class TestDecisionSystem:
         assert len(w.index.get_with(Movable)) == 4
 
         # Cooldown is derived from the parent's wear_resistance gene.
-        expected_cooldown = 100 + traits_for(e1.get_component(Genome)).wear_resistance.cooldown
+        expected_cooldown = 100 + traits_for(e1.get_component(Genome)).additional_cooldown()
 
         # Interpretation cycle until the mating command completes
         for _ in range(15):
@@ -589,6 +614,15 @@ class TestBalanceWiring:
         plant_system({plant}, w)
 
         assert plant.get_component(Plant).energy == 10
+
+    def test_plant_system_accepts_fractional_energy_increase(self):
+        w = World(10, 10)
+        plant = Entity().add_component(Plant(energy=0.0, energy_increase=0.5, fructify_threshold=80))
+        w.place_entity(plant, 5, 5)
+
+        plant_system({plant}, w)
+
+        assert plant.get_component(Plant).energy == pytest.approx(0.5)
 
     def test_eat_utility_uses_food_saturation(self):
         bio = Biochemistry(hunger=100)

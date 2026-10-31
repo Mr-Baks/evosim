@@ -261,8 +261,8 @@ population. It contains one row per sample with:
 - mean phenotype and mean allele value for every gene (dominance-aware
   phenotype and `(allele1 + allele2) / 2`, respectively);
 - mean and maximum `Lineage.generation`;
-- mean derived traits from `traits_for(genome)`, including nested speed, wear,
-  colour and vision components.
+- mean derived traits from `traits_for(genome)`, including nested speed,
+  metabolism, wear, colour and vision components.
 
 The column order is fixed by `feature_header()` in `features.py`, not inferred
 from the current population. Empty samples keep the same width and use zeroes
@@ -404,7 +404,7 @@ def _find_path(self, world, start, ignore_entity=None):
 | `vision_system` | `Vision` | 200 | Rebuilds `Vision.visibles` and `Vision.cache` (`creatures`, `partners`, `foods`, `plants`) in one radius scan |
 | `decision_system` | `CommandQueue`, `State`, `Biochemistry`, `Vision`, `Genome` | 100 | Utility-based AI; the function also skips entities lacking `Biochemistry`/`Vision`/`Genome` |
 | `plant_system` | `Plant` | 75 | Grows energy (cap 150) and drops fruit when above `fructify_threshold` |
-| `biochemistry_system` | `CommandQueue`, `Biochemistry` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`; also expects `Genome`). Reuses `Vision.cache['creatures']` for crowd pressure when `crowd_radius <= vision.radius`, otherwise falls back to a grid count |
+| `biochemistry_system` | `CommandQueue`, `Biochemistry`, `Genome` | 70 | Ageing/wear, metabolism, regeneration, starvation → death (guards a missing `Breedable`). Reuses `Vision.cache['creatures']` for crowd pressure when `crowd_radius <= vision.radius`, otherwise falls back to a grid count |
 | `command_system` | `CommandQueue` | 50 | Picks next ready command and executes the running one |
 | `logging_system` | `CommandQueue`, `State`, `Biochemistry`, `Vision`, `Genome` | 0 | Writes per-entity state and utilities to `logs/last_tick.txt` |
 
@@ -468,8 +468,11 @@ or clear the cache yourself.
 Scaling and formulas are grouped by gene, which makes **pleiotropy** explicit:
 `speed` becomes both `traits.speed.locomotion` (body speed) and
 `traits.speed.metabolic` (drain multiplier); `wear_resistance` becomes both
-`traits.wear_resistance.aging` (lifespan `L`) and `traits.wear_resistance.cooldown`
-(reproduction cooldown). Nothing in `systems.py` reads a raw scale any more.
+`traits.wear_resistance.aging` (lifespan `L`) and
+`traits.wear_resistance.cooldown` (reproduction cooldown); `metabolism`
+becomes three traits: `metabolic` (maintenance/regeneration),
+`digestion` (satiety per food) and `cooldown_modifier` (post-mating recovery).
+Nothing in `systems.py` reads a raw scale any more.
 
 ```python
 from traits import traits_for
@@ -484,8 +487,8 @@ bio.max_health = traits.max_health(bio.vitality)
 breedable.fertility = traits.effective_fertility(bio.vitality)
 
 # --- Metabolism (when not sleeping) ------------------------------------------
-bio.energy = max(bio.energy - traits.energy_drain(bio.vitality), 0)
-bio.hunger = max(bio.hunger - traits.hunger_drain(), 0)
+bio.energy = max(bio.energy - traits.energy_drain(bio.vitality) * balance.metabolic_cost_scale, 0)
+bio.hunger = max(bio.hunger - traits.hunger_drain() * balance.hunger_cost_scale, 0)
 
 # --- Reproduction cooldown ----------------------------------------------------
 breedable.cooldown = max(breedable.cooldown - 1, 0)
@@ -511,7 +514,7 @@ The base scalings are:
 
 | Gene | Effect | Scale |
 |------|--------|-------|
-| `metabolism` | `Traits.metabolism` — multiplier in drain and regeneration cost | `(0.1, 2)`, log |
+| `metabolism` | `Traits.metabolism.metabolic` / `.digestion` / `.cooldown_modifier` — one locus, three effects | `(0.1, 2.5)` log / `(0.5, 1.5)` / `(0.001, 0.9)` log |
 | `speed` | `Traits.speed.locomotion` / `Traits.speed.metabolic` | `(0, 5)` / `(1, 3)` |
 | `fertility` | `Traits.fertility` | `(0, 1)` |
 | `senescence_shape` | `Traits.senescence_shape` | `(1, 3)` |
@@ -531,11 +534,22 @@ The base scalings are:
 | `wear = min(1, age / L)` | `Traits.wear(age)` |
 | `vitality = max(0, 1 - wear ** a)` | `Traits.vitality(age)` |
 | `max_health = vitality * 100` | `Traits.max_health(vitality)` |
-| `energy = metabolism · speed² · (2 - vitality) * vision` | `Traits.energy_drain(vitality)` |
-| `hunger = metabolism · speed² · (L / 710) * vision` | `Traits.hunger_drain()` |
+| `energy = M² · (0.5 + 0.5D) · speed_metabolic · (2 - vitality) · vision_metabolic · metabolic_cost_scale` | `Traits.energy_drain(vitality)` |
+| `hunger = (L / 710) · (M / 0.5) · speed_metabolic · 0.5 · vision_metabolic · hunger_cost_scale` | `Traits.hunger_drain()` |
+| `hunger_gain = D · nutrition` | `Traits.hunger_gain(nutrition)` |
+| `cooldown = round(wear_cooldown · (1 - 0.5 · cooldown_modifier))` | `Traits.additional_cooldown()` |
 | `fertility · min(1, vitality·2) · (1 - a/3)` | `Traits.effective_fertility(vitality)` |
-| `regen_increase · metabolism · vitality` | `Traits.regeneration_gain(vitality)` |
-| `regen_increase² · metabolism / 2` | `Traits.regeneration_cost()` |
+| `regen_increase · M · vitality` | `Traits.regeneration_gain(vitality)` |
+| `regen_increase² · M / 2` | `Traits.regeneration_cost()` |
+
+Here `M` is `Traits.metabolism.metabolic`, `D` is
+`Traits.metabolism.digestion`, and `L` is the wear-resistance lifespan.
+The `metabolism` locus is pleiotropic:
+
+- `metabolic` raises maintenance costs but also raises generation
+  regeneration and improves recovery (`additional_cooldown`);
+- `digestion` increases satiety per food item but also raises maintenance;
+- `cooldown_modifier` shortens the post-mating cooldown.
 
 ### The ageing model
 
@@ -572,7 +586,7 @@ There is no built-in sink, so the event is discarded if nobody subscribes.
 | `MoveToTargetCommand` | 15 (to food), 1 (to partner), inherits `WanderCommand`'s otherwise | `eat`/`mating`/`idle` | A\* pathfinding to `(x, y)` |
 | `EatCommand` | 16 | `eat` | Consume adjacent food |
 | `SleepCommand` | 10 | `sleep` | Rest `ticks_to_sleep` ticks, emit `SleepEvent` each tick |
-| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, both cooldowns are set to `world.balance.mating_cooldown_base + traits.wear_resistance.cooldown` (default base `100`), and a successful placement emits `BirthEvent` |
+| `MateCommand` | 2 | `mating` | Create offspring with a partner (genome recombination); the child's colour and speed come from `traits_for(child_genome)`, both cooldowns are set to `world.balance.mating_cooldown_base + traits.additional_cooldown()` (default base `100`), and a successful placement emits `BirthEvent` |
 | `WanderCommand` | 0 (default) | `eat`/`idle` | Samples `wander_angles_count` points within `radius`, picks the best by food/plant/crowd utility, and pushes a `MoveToTargetCommand` |
 | `DeathCommand` | 100 | – | Remove entity, optionally leave a corpse, emit `DeathEvent` with the entity's age |
 
@@ -582,7 +596,7 @@ There is no built-in sink, so the event is discarded if nobody subscribes.
 |-------|---------|------------------------|
 | `MoveEvent` | `source` | `bio.energy = max(0, bio.energy - 2)` |
 | `SleepEvent` | `source`, `energy_increase` (default 30) | `bio.energy = min(bio.energy + energy_increase, 200)` |
-| `EatEvent` | `source`, `nutrition` (default 35) | `bio.hunger = min(bio.hunger + nutrition, 200)` |
+| `EatEvent` | `source`, `nutrition` (default 35) | If `source` has a genome, `bio.hunger = min(bio.hunger + digestion · nutrition, 200)`; otherwise uses raw nutrition |
 | `BirthEvent` | `source` (child), `parent1`, `parent2` | No default handler; birth/telemetry hook |
 | `DeathEvent` | `source` (dead entity), `age` | No default handler; mortality/telemetry hook |
 
@@ -603,12 +617,18 @@ by how often they change:
 |-------|---------|----------------|
 | `RunConfig` | a single run | `seed`, `ticks`, `headless`, `tickspeed`, `fps`, `record_every`, `output_dir` |
 | `ScenarioConfig` | initial conditions | `world`, `initial_plants`, `initial_creatures`, `creature_color`, `founder_genes`, `founder_genes_jitter` |
-| `BalanceConfig` | world "physics", read by systems via `world.balance` | `mating_energy_cost`, `corpse_nutrition`, utility saturations, ... |
+| `BalanceConfig` | world "physics", read by systems via `world.balance` | `plant_energy_increase`, `metabolic_cost_scale`, `hunger_cost_scale`, `mating_energy_cost`, ... |
 
 Precedence: **dataclass defaults → TOML file → CLI flags**. The CLI currently
 overrides only `RunConfig` fields (`seed`, `ticks`, `record_every`, `output_dir`,
 `tickspeed`, `fps`, `headless`); scenario and balance values come from the TOML
 file.
+
+`plant_energy_increase` is a float, so plant growth can be tuned continuously.
+`metabolic_cost_scale` and `hunger_cost_scale` multiply the per-tick energy and
+hunger drains; both default to `1.0` and therefore preserve the baseline model.
+Use them to build cheap/expensive environments, but change only one ecological
+factor at a time when comparing conditions.
 
 ```python
 from config import load_config, SimConfig
@@ -663,7 +683,7 @@ if not cfg.run.headless:
 # System registration order matters (higher priority runs first)
 sim.register_system(frozenset([CommandQueue]), command_system, priority=50)
 sim.register_system(frozenset([Vision]), vision_system, priority=200)
-sim.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
+sim.register_system(frozenset([CommandQueue, Biochemistry, Genome]), biochemistry_system, priority=70)
 sim.register_system(frozenset([Plant]), plant_system, priority=75)
 sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome]), decision_system, priority=100)
 ```

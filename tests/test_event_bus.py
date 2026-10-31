@@ -1,5 +1,7 @@
 from event_bus import Event, EventBus, MoveEvent, SleepEvent, EatEvent, on_move, on_sleep, on_eat
 from entity import Entity, Biochemistry
+from genome import GeneNames
+from tests.helpers import default_genes
 
 
 class TestEvent:
@@ -178,6 +180,20 @@ class TestEventHandlers:
         event = EatEvent(source=ent, nutrition=30)
         on_eat(event)
         assert ent.get_component(Biochemistry).hunger == 80
+
+    def test_on_eat_uses_digestion_when_genome_present(self):
+        ent = (Entity()
+               .add_component(Biochemistry(hunger=50))
+               .add_component(default_genes(**{GeneNames.METABOLISM: 1.0})))
+        event = EatEvent(source=ent, nutrition=20)
+        on_eat(event)
+        assert ent.get_component(Biochemistry).hunger == 80
+
+    def test_on_eat_without_genome_uses_raw_nutrition(self):
+        ent = Entity().add_component(Biochemistry(hunger=50))
+        event = EatEvent(source=ent, nutrition=20)
+        on_eat(event)
+        assert ent.get_component(Biochemistry).hunger == 70
 
     def test_on_eat_hunger_capped_at_200(self):
         ent = Entity().add_component(Biochemistry(hunger=180))

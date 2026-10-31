@@ -48,8 +48,8 @@ class Vision(Component):
 
 @dataclass 
 class Plant(Component):
-    energy: int = 0
-    energy_increase: int = 2
+    energy: float = 0.0
+    energy_increase: float = 2.0
     fructify_threshold: int = 80
     fruit_nutrition: int = 25
 

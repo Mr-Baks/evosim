@@ -47,8 +47,8 @@ class Command(ABC):
         state = entity.get_component(State)
 
         if status == CommandStatus.FAILED:
-                    with open('logs/error_log.txt', 'a') as log:
-                        log.write(f'Command {type(self)} failed | current state: {state.current if state else 'no state'} \n')
+            with open('logs/error_log.txt', 'a') as log:
+                log.write(f'Command {type(self)} failed | current state: {state.current if state else 'no state'} \n')
         
         if queue and queue.running == self:
             queue.running = None
@@ -514,8 +514,8 @@ class MateCommand(Command):
             x, y = free_cell
             world.place_entity(child, x, y)
 
-            entity.get_component(Breedable).cooldown = world.balance.mating_cooldown_base + traits_for(genome1).wear_resistance.cooldown
-            self.partner.get_component(Breedable).cooldown = world.balance.mating_cooldown_base + traits_for(genome2).wear_resistance.cooldown
+            entity.get_component(Breedable).cooldown = world.balance.mating_cooldown_base + traits_for(genome1).additional_cooldown()
+            self.partner.get_component(Breedable).cooldown = world.balance.mating_cooldown_base + traits_for(genome2).additional_cooldown()
 
             bio1.energy -= world.balance.mating_energy_cost
             bio1.hunger -= world.balance.mating_hunger_cost

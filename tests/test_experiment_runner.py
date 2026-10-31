@@ -28,7 +28,7 @@ def test_minimal_runner_writes_runs_and_summary(tmp_path):
     assert [row['condition'] for row in rows] == ['baseline', 'crowd_off']
     assert all(row['seed'] == '1' for row in rows)
     assert all(row['ticks'] == '5' for row in rows)
-    assert all(row['population'] == '40' for row in rows)
+    assert all(row['population'] == '100' for row in rows)
 
     with open(base / 'matrix.json') as file:
         matrix = json.load(file)
@@ -47,7 +47,7 @@ def test_minimal_runner_writes_runs_and_summary(tmp_path):
 
     assert feature_rows[0] == feature_header()
     assert [row[0] for row in feature_rows[1:]] == ['0', '5']
-    assert feature_rows[1][1] == '40'
+    assert feature_rows[1][1] == '100'
     assert all(len(row) == len(feature_header()) for row in feature_rows)
 
     baseline = json.loads((base / 'baseline' / 'seed=1' / 'config.json').read_text())

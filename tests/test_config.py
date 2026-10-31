@@ -25,7 +25,7 @@ class TestDefaults:
         assert cfg.run == RunConfig(seed=1, ticks=1200, headless=False)
         assert cfg.scenario.world == WorldConfig(width=100, height=40)
         assert cfg.scenario.initial_plants == 120
-        assert cfg.scenario.initial_creatures == 40
+        assert cfg.scenario.initial_creatures == 100
         assert cfg.scenario.founder_genes_jitter == 0.0
         assert isinstance(cfg.balance, BalanceConfig)
 
@@ -40,6 +40,9 @@ class TestDefaults:
         assert balance.mating_hunger_cost == 110
         assert balance.mating_cooldown_base == 100
         assert balance.sleep_energy_increase == 45
+        assert balance.plant_energy_increase == 2.0
+        assert balance.metabolic_cost_scale == 1.0
+        assert balance.hunger_cost_scale == 1.0
 
     def test_default_founder_has_low_metabolism(self):
         genes = {gene[0]: gene for gene in DEFAULT_FOUNDER_GENES}
@@ -66,6 +69,18 @@ class TestFromDict:
         assert cfg.scenario.creature_color == (1, 2, 3)
         assert cfg.scenario.founder_genes == (("speed", -0.4, -0.4, 0.5),)
         assert cfg.balance.corpse_nutrition == 0
+
+    def test_balance_accepts_fractional_productivity_and_cost_scales(self):
+        cfg = SimConfig.from_dict({
+            "balance": {
+                "plant_energy_increase": 1.5,
+                "metabolic_cost_scale": 2.0,
+                "hunger_cost_scale": 0.5,
+            }
+        })
+        assert cfg.balance.plant_energy_increase == 1.5
+        assert cfg.balance.metabolic_cost_scale == 2.0
+        assert cfg.balance.hunger_cost_scale == 0.5
 
     def test_partial_dict_keeps_defaults(self):
         cfg = SimConfig.from_dict({"run": {"seed": 3}})

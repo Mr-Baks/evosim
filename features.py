@@ -29,7 +29,9 @@ GENE_NAMES = (
 TRAIT_COLUMNS = (
     'speed_locomotion',
     'speed_metabolic',
-    'metabolism',
+    'metabolism_metabolic',
+    'metabolism_digestion',
+    'metabolism_cooldown_modifier',
     'fertility',
     'senescence_shape',
     'wear_aging',
@@ -73,7 +75,9 @@ def _trait_values(traits: Traits) -> list[float]:
     return [
         traits.speed.locomotion,
         traits.speed.metabolic,
-        traits.metabolism,
+        traits.metabolism.metabolic,
+        traits.metabolism.digestion,
+        traits.metabolism.cooldown_modifier,
         traits.fertility,
         traits.senescence_shape,
         traits.wear_resistance.aging,

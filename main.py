@@ -183,7 +183,7 @@ def build_simulation(cfg: SimConfig) -> Simulation:
         
     sim.register_system(frozenset([CommandQueue]), command_system, priority=50)
     sim.register_system(frozenset([Vision]), vision_system, priority=200)
-    sim.register_system(frozenset([CommandQueue, Biochemistry]), biochemistry_system, priority=70)
+    sim.register_system(frozenset([CommandQueue, Biochemistry, Genome]), biochemistry_system, priority=70)
     sim.register_system(frozenset([Plant]), plant_system, priority=75)
     sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome]), decision_system, priority=100)
 

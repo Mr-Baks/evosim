@@ -1,7 +1,10 @@
 from config import RunConfig, ScenarioConfig, SimConfig, WorldConfig
+from entity import Entity, Movable
 from features import GENE_NAMES, TRAIT_COLUMNS, feature_header, log_features
+from tests.helpers import default_genes
 from world import World
 import main
+import pytest
 
 
 def test_feature_header_is_stable():
@@ -15,6 +18,18 @@ def test_feature_header_is_stable():
         f'gene_{name}_allele' for name in GENE_NAMES
     ]
     assert header[-len(TRAIT_COLUMNS):] == list(TRAIT_COLUMNS)
+
+
+def test_feature_matrix_flattens_metabolism_pleiotropy():
+    world = World(5, 5)
+    entity = Entity().add_component(Movable()).add_component(default_genes())
+    world.place_entity(entity, 2, 2)
+
+    row = dict(zip(feature_header(), log_features(world, 1)))
+
+    assert row['metabolism_metabolic'] == pytest.approx(0.5)
+    assert row['metabolism_digestion'] == pytest.approx(1.0)
+    assert row['metabolism_cooldown_modifier'] == pytest.approx(0.03)
 
 
 def test_log_features_empty_world_keeps_matrix_shape():

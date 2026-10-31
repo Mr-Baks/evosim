@@ -81,11 +81,11 @@ def biochemistry_system(entities: set[Entity], world: World):
         decay = world.balance.health_decay
 
         if not queue.running or not isinstance(queue.running, SleepCommand):
-            bio.energy = max(0, bio.energy - traits.energy_drain(bio.vitality))
+            bio.energy = max(0, bio.energy - traits.energy_drain(bio.vitality) * world.balance.metabolic_cost_scale)
             if bio.energy == 0:
                 bio.health = max(bio.health - decay, 0)
 
-        bio.hunger = max(bio.hunger - traits.hunger_drain(), 0)
+        bio.hunger = max(bio.hunger - traits.hunger_drain() * world.balance.hunger_cost_scale, 0)
 
         if breedable:
             breedable.cooldown = max(breedable.cooldown - 1, 0)
