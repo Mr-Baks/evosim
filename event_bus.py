@@ -1,7 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 from typing import Optional
-from entity import *
+from entity import Entity, Biochemistry
 
 @dataclass
 class Event(ABC):

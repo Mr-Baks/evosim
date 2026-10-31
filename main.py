@@ -4,15 +4,15 @@ Running this module directly starts the TUI simulation. Importing it has no
 side effects, so experiment runners and tests can reuse build_simulation.
 """
 import random
-from commands import *
+from commands import create_entity_from_genome, CommandQueue
 from config import SimConfig, load_config, FounderGene
-from entity import *
-from event_bus import BirthEvent, DeathEvent, EatEvent, Event, EventBus, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
+from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Lineage, Vision
+from event_bus import BirthEvent, DeathEvent, EatEvent, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
 from features import feature_header, log_features
 from genome import Gene, GeneNames, Genome
 from logger import RunLogger
 from simulation import Simulation
-from systems import *
+from systems import plant_system, vision_system, command_system, logging_system, decision_system, biochemistry_system
 from world import World
 
 

@@ -1,4 +1,4 @@
-from entity import * 
+from entity import Render, Component
 from world import World
 import time
 

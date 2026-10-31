@@ -1,14 +1,14 @@
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from enum import Enum
-from entity import *
+from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Breedable, Plant, Lineage, Component, Vision
 from world import World
-from event_bus import *
+from event_bus import EatEvent, SleepEvent, DeathEvent, MoveEvent, BirthEvent
 import math
 import random
 import heapq
 from typing import Optional
-from genome import Genome, GeneNames
+from genome import Genome
 from traits import Traits, traits_for
 
 

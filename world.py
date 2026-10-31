@@ -1,6 +1,6 @@
 from typing import Callable, Optional
 from config import BalanceConfig
-from entity import *
+from entity import Entity, Movable, Component
 from event_bus import EventBus
 import random
 

@@ -5,7 +5,7 @@ from systems import *
 from commands import *
 from entity import *
 from world import World
-from event_bus import EventBus
+from event_bus import EventBus, on_eat, on_move, on_sleep
 from genome import Genome, GeneNames
 from traits import traits_for
 from tests.helpers import (

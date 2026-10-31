@@ -1,9 +1,10 @@
-from commands import CommandQueue, CommandStatus
+from commands import CommandQueue, CommandStatus, EatCommand, DeathCommand, SleepCommand, MateCommand, WanderCommand, MoveToTargetCommand, push_command
 from config import BalanceConfig
-from entity import *
+from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Vision, Breedable
 from world import World
-from commands import *
+from commands import CommandQueue, CommandStatus
 from traits import traits_for
+from genome import Genome
 import random
 
 
