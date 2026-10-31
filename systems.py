@@ -9,6 +9,7 @@ import random
 
 
 def command_system(entities: set[Entity], world: World):
+    """Starts and executes the running command for each entity"""
     for e in entities:
         queue: CommandQueue = e.get_component(CommandQueue)
         state: State = e.get_component(State)
@@ -28,6 +29,7 @@ def command_system(entities: set[Entity], world: World):
         if len(queue.queue) > 25: print('LEAK')
 
 def vision_system(entities: set[Entity], world: World):
+    """Rebuilds each entity's visible entities and category cache"""
     for e in entities:
         vision: Vision = e.get_component(Vision)
         vision.visibles = []
@@ -46,6 +48,7 @@ def vision_system(entities: set[Entity], world: World):
                 vision.cache['plants'].append(ve)
 
 def biochemistry_system(entities: set[Entity], world: World):
+    """Updates ageing, energy, hunger, health and fertility"""
     for e in entities:
         bio: Biochemistry = e.get_component(Biochemistry)
         breedable: Breedable = e.get_component(Breedable)
@@ -101,6 +104,7 @@ def biochemistry_system(entities: set[Entity], world: World):
             push_command(e, world, DeathCommand(emergency=100, corpse_nutrition=world.balance.corpse_nutrition))
 
 def plant_system(entities: set[Entity], world: World):
+    """Grows plants and spawns fruit when ready"""
     for e in entities:
         plant: Plant = e.get_component(Plant)
         plant.energy = min(plant.energy + plant.energy_increase, world.balance.plant_energy_cap)
@@ -112,6 +116,7 @@ def plant_system(entities: set[Entity], world: World):
                 world.place_entity(fruit, *random.choice(free_cells))
 
 def eat_utility(bio: Biochemistry, genome: Genome, food_count: int, balance: BalanceConfig) -> float:
+    """Scores the eat action from hunger and visible food"""
     hunger_factor = 1 - (bio.hunger / balance.hunger_scale)
 
     food_factor = max(0.01, min(food_count / balance.food_saturation, 1))
@@ -121,12 +126,14 @@ def eat_utility(bio: Biochemistry, genome: Genome, food_count: int, balance: Bal
     return hunger_factor * food_factor * genetic_drive
 
 def sleep_utility(bio: Biochemistry, genome: Genome, balance: BalanceConfig) -> float:
+    """Scores the sleep action from missing energy"""
     energy_factor = 1 - (bio.energy / balance.energy_scale)
     genetic_drive = traits_for(genome).sleep_drive
 
     return energy_factor * genetic_drive
 
 def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partner_count: int, balance: BalanceConfig) -> float:
+    """Scores the mating action from readiness and partners"""
     if breedable is None:
         return -1
 
@@ -150,6 +157,7 @@ def mate_utility(bio: Biochemistry, genome: Genome, breedable: Breedable, partne
     return biochemistry_factor * partner_factor * genetic_drive * fertility
 
 def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plant_count: int, balance: BalanceConfig) -> float:
+    """Scores idle wandering from exploration, crowd and plants"""
     traits = traits_for(genome)
 
     starvation = min(1.0, max(0.0, 1 - bio.hunger / balance.hunger_scale))
@@ -164,6 +172,7 @@ def wander_utility(bio: Biochemistry, genome: Genome, creatures_count: int, plan
     return max(0, utility)
 
 def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
+    """Returns food, creature, partner and plant counts"""
     if vision.cache is not None:
         food = len(vision.cache['foods'])
         creatures = len(vision.cache['creatures'])
@@ -186,6 +195,7 @@ def visible_counts(vision: Vision) -> tuple[int, int, int, int]:
     return food, creatures, partners, plants
 
 def logging_system(entities: set[Entity], world: World):
+    """Writes a human-readable state dump for the current tick"""
     log = ''
 
     for i, e in enumerate(entities):
@@ -215,6 +225,7 @@ def logging_system(entities: set[Entity], world: World):
         l.write(log)
 
 def decision_system(entities: set[Entity], world: World):
+    """Chooses and queues the highest-utility action"""
     for e in entities:
         state: State = e.get_component(State)
         vision: Vision = e.get_component(Vision)

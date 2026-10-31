@@ -18,6 +18,7 @@ class QueryIndex:
         self.pending_removal: list[Entity] = []
     
     def add_entity(self, entity: Entity) -> None:
+        """Adds an entity to the component index"""
         if self.locked:
             self.pending_addition.append(entity)
             return
@@ -38,6 +39,7 @@ class QueryIndex:
         self.systems_cache_dirty = True
 
     def remove_entity(self, entity: Entity) -> None:
+        """Removes an entity from the component index"""
         if self.locked:
             if entity in self.pending_addition:
                 self.pending_addition.remove(entity)
@@ -56,6 +58,7 @@ class QueryIndex:
                 self.systems_cache[key].remove(entity)
 
     def sort_cache(self):
+        """Sorts dirty component and system caches by entity id"""
         if self.component_index_dirty:
             for lst in self.component_index.values():
                 lst.sort(key=lambda e: e.eid)
@@ -67,6 +70,7 @@ class QueryIndex:
             self.systems_cache_dirty = False
 
     def flush_pending(self):
+        """Applies queued additions and removals"""
         if self.locked: return
 
         for e in self.pending_removal:
@@ -79,10 +83,12 @@ class QueryIndex:
         self.pending_removal.clear()
         
     def register_system(self, components: frozenset[type[Component]]) -> None:
+        """Creates a cached entity list for a component set"""
         self.systems_cache[components] = list(self.get_with(*components))
         self.systems_cache_dirty = True
 
     def get_with(self, *component_types: type[Component]) -> list[Entity]:
+        """Returns entities that contain all given component types"""
         if not component_types:
             return list(self.entities)
 
@@ -124,6 +130,7 @@ class World:
         return True
 
     def make_move(self, entity: Entity, x: int, y: int) -> bool:
+        """Moves an entity to a free adjacent cell if possible"""
         if not entity.has_component(Movable): return False
         if not self._check_cell(x, y): return False
 
@@ -137,10 +144,12 @@ class World:
         return True
     
     def get_entity(self, x: int, y: int) -> Optional[Entity]:
+        """Returns the entity at the given position or None"""
         if 0 <= x < self.width and 0 <= y < self.height:
             return self.cells[y][x]
 
     def place_entity(self, entity: Entity, x: int, y: int) -> bool:
+        """Places an entity at the given position and indexes it"""
         if not self._check_cell(x, y): return False
         
         self.cells[y][x] = entity
@@ -152,6 +161,7 @@ class World:
         return True
 
     def remove_entity(self, entity: Entity) -> Optional[Entity]:
+        """Removes an entity from the grid and index"""
         if self.get_entity(entity.x, entity.y) is entity:
             self.index.remove_entity(entity)
             self.cells[entity.y][entity.x] = None
@@ -185,6 +195,7 @@ class World:
         return self._column_cache[radius]
 
     def get_neighbours(self, entity: Entity, radius=1, sort: bool = True) -> list[Entity]:
+        """Returns entities within the given radius"""
         neighbours = []
         x, y = entity.x, entity.y
 
@@ -199,6 +210,7 @@ class World:
         return sorted(neighbours, key=lambda e: e.eid) if sort else neighbours
 
     def count_near(self, x: int, y: int, condition: Callable[[Entity], bool], radius: int = 3, normed: bool = False) -> float:
+        """Counts entities matching a condition within a radius"""
         count = 0
         cells = 0
 
@@ -222,6 +234,7 @@ class World:
         return count
 
     def count_components_near(self, x: int, y: int, component_types: tuple[type[Component]], radius: int = 3, normed: bool = False, exclude: Entity | None = None) -> tuple[float]:
+        """Counts several component types in one nearby scan"""
         counts = [0] * len(component_types)
         indexed_types = tuple(enumerate(component_types))
         cells = 0
@@ -253,6 +266,7 @@ class World:
         return tuple(counts)
 
     def get_free_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
+        """Returns free cells within the given radius"""
         free_cells = []
         x, y = entity.x, entity.y
 
@@ -266,10 +280,12 @@ class World:
         return free_cells
 
     def get_free_cell_near(self, entity: Entity, radius: int = 1) -> tuple[int, int] | None:
+        """Returns a random free cell within the given radius"""
         free_cells = self.get_free_cells_near(entity, radius)
         return random.choice(free_cells) if free_cells else None
     
     def get_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
+        """Returns all cells within the given radius"""
         cells = []
         x, y = entity.x, entity.y
 
@@ -280,6 +296,7 @@ class World:
         return cells
 
     def add_component(self, entity, component):
+        """Adds a component through the world index"""
         if self.index.locked:
             self.pending_component_addition.setdefault(entity, []).append(component)
             return
@@ -299,6 +316,7 @@ class World:
                     self.index.systems_cache_dirty = True
 
     def remove_component(self, entity, component_type):
+        """Removes a component through the world index"""
         if self.index.locked:
             self.pending_component_removal.setdefault(entity, []).append(component_type)
             return
@@ -319,6 +337,7 @@ class World:
         return removed
 
     def flush_pending(self):
+        """Applies queued entity and component changes"""
         if self.index.locked: return
         self.index.flush_pending()
 

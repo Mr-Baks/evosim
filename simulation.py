@@ -14,6 +14,7 @@ class Simulation:
         self.on_tick_callbacks: list[callable] = []
 
     def register_system(self, required_components: frozenset[type[Component]], system: callable, priority: int = 0) -> None:
+        """Registers a system with its required components and priority"""
         for i, (p, _, _) in enumerate(self.systems):
             if priority > p:
                 self.systems.insert(i, (priority, required_components, system))
@@ -23,6 +24,7 @@ class Simulation:
         self.world.index.register_system(required_components)
 
     def handle_systems(self) -> None:
+        """Runs all systems in priority order and flushes pending changes"""
         self.world.index.sort_cache()
         self.world.index.locked = True
         for _, req_comps, system in self.systems:
@@ -31,9 +33,11 @@ class Simulation:
         self.world.flush_pending()
 
     def add_on_tick(self, callback: callable) -> None:
+        """Registers a callback invoked after each tick"""
         self.on_tick_callbacks.append(callback)
 
     def step(self) -> None:
+        """Advances the simulation by one tick"""
         self.handle_systems()
         self.world.event_bus.dispatch()
         self.tick += 1
@@ -42,6 +46,7 @@ class Simulation:
             c(self)
         
     def render(self) -> list[list[str]]: 
+        """Builds the ANSI screen from visible render components"""
         screen = [[self.background_sym for _ in range(self.world.width)] for _ in range(self.world.height)]
         renderables = self.world.index.get_with(Render)
 
@@ -54,12 +59,14 @@ class Simulation:
         return screen
 
     def print_scene(self):
+        """Prints the current rendered scene"""
         out = ''
         for line in self.render():
             out += ''.join(line) + '\n'
         print(out)
 
     def run(self, target_tick: int | None = None):
+        """Runs the interactive loop until the target tick is reached"""
         last_time = time.time()
         accumulator = 0.0
         tick_duration = 1.0 / self.tickspeed

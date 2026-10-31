@@ -25,6 +25,7 @@ class RunLogger:
         self.subscriptions: list[tuple[type[Event], Callable[[Event], None]]] = []
 
     def add_query(self, name: str, callback: Callable[[World, int], Sequence[object]], header: Sequence[str] | str, every: int = 50) -> None:
+        """Registers a periodic world query and its CSV header"""
         self.queries[name] = []
         self.callbacks[name] = callback
         self._open_file(name, header)
@@ -34,6 +35,7 @@ class RunLogger:
         self.call_every[every].append(name)
 
     def add_event_query(self, name: str, event_type: type[Event], callback: Callable[[Event, World, int], Sequence[object]], header: Sequence[str] | str) -> None:
+        """Registers an event-driven query and its CSV header"""
         self.queries[name] = []
         self._open_file(name, header)
 
@@ -52,6 +54,7 @@ class RunLogger:
         self.writers[name] = writer
 
     def on_tick(self, tick: int) -> None:
+        """Updates the tick and records due periodic queries"""
         self.tick = tick
 
         for period, names in self.call_every.items():
@@ -63,6 +66,7 @@ class RunLogger:
             self.flush()
 
     def flush(self) -> None:
+        """Writes buffered rows to their CSV files"""
         for name, rows in self.queries.items():
             for row in rows:
                 self.writers[name].writerow(row)
@@ -71,6 +75,7 @@ class RunLogger:
             rows.clear()
 
     def close(self) -> None:
+        """Flushes logs, unsubscribes handlers and closes files"""
         if self.closed:
             return
 

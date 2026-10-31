@@ -17,7 +17,7 @@ from world import World
 
 
 def jitter_genes(genes: tuple[FounderGene, ...], jitter: float = 0.0) -> tuple[FounderGene, ...]:
-    """Add shared per-locus jitter while keeping alleles in ``[-1, 1]``."""
+    """Add shared per-locus jitter while keeping alleles in [-1, 1]."""
     if not 0 <= jitter <= 1:
         raise ValueError("Founder gene jitter must be in [0, 1]")
     if jitter == 0:
@@ -37,6 +37,7 @@ def jitter_genes(genes: tuple[FounderGene, ...], jitter: float = 0.0) -> tuple[F
     return tuple(jittered)
 
 def make_creature(x, y, world: World, cfg: SimConfig, color=None):
+    """Creates a founder creature with genome-derived components"""
     color = color or cfg.scenario.creature_color
     founder_genes = jitter_genes(cfg.scenario.founder_genes, jitter=cfg.scenario.founder_genes_jitter)
     genes = [Gene(name, a1, a2, dominance=dom) for name, a1, a2, dom in founder_genes]
@@ -49,10 +50,12 @@ def make_creature(x, y, world: World, cfg: SimConfig, color=None):
     world.place_entity(e, x, y)
 
 def make_food(x, y, world: World, nutrition=20):
+    """Creates a food entity at the given position"""
     e = Entity().add_component(Eatable(nutrition))
     world.place_entity(e, x, y)
 
 def make_plant(x, y, world: World, cfg: SimConfig):
+    """Creates a plant entity at the given position"""
     threshold = random.randint(cfg.balance.plant_fructify_min, cfg.balance.plant_fructify_max)
     e = (Entity()
          .add_component(Plant(energy_increase=cfg.balance.plant_energy_increase,
@@ -62,6 +65,7 @@ def make_plant(x, y, world: World, cfg: SimConfig):
     world.place_entity(e, x, y)
 
 def tick_stats(sim: Simulation):
+    """Prints current creature, food and mean speed statistics"""
     food_amount = len(sim.world.index.get_with(Eatable))
     creatures_amount = len(sim.world.index.get_with(Movable))
 
@@ -95,6 +99,7 @@ def _mean(values):
     return sum(values) / len(values) if values else 0.0
 
 def log_population(world: World, tick: int):
+    """Builds a population snapshot row for the current tick"""
     creatures = [e for e in world.index.get_with(Movable) if e.get_component(Biochemistry)]
     biochemistry = [e.get_component(Biochemistry) for e in creatures]
     return [
@@ -109,6 +114,7 @@ def log_population(world: World, tick: int):
     ]
 
 def log_birth(event: BirthEvent, world: World, tick: int):
+    """Builds a birth event row"""
     child = event.source
     lineage = child.get_component(Lineage)
     return [
@@ -120,6 +126,7 @@ def log_birth(event: BirthEvent, world: World, tick: int):
     ]
 
 def log_death(event: DeathEvent, world: World, tick: int):
+    """Builds a death event row"""
     entity = event.source
     bio = entity.get_component(Biochemistry)
     lineage = entity.get_component(Lineage)
@@ -135,6 +142,7 @@ def log_death(event: DeathEvent, world: World, tick: int):
     ]
 
 def build_logger(sim: Simulation, cfg: SimConfig) -> RunLogger:
+    """Creates and wires the CSV logger for a simulation"""
     logger = RunLogger(sim.world, sim.world.event_bus, cfg.run.output_dir)
     period = max(1, cfg.run.record_every)
     logger.add_query(
@@ -160,7 +168,7 @@ def build_logger(sim: Simulation, cfg: SimConfig) -> RunLogger:
     return logger
 
 def build_simulation(cfg: SimConfig) -> Simulation:
-    """Assemble the default world described by ``cfg`` (no stepping)."""
+    """Assemble the default world described by cfg (no stepping)."""
     sim = Simulation(cfg.run.tickspeed, cfg.run.fps, cfg.scenario.world.size, background_sym='.')
     sim.world.balance = cfg.balance
 
@@ -189,6 +197,7 @@ def run_headless(sim: Simulation, ticks: int) -> None:
         sim.step()
 
 def main(cfg: SimConfig | None = None) -> None:
+    """Builds and runs a simulation from the given config"""
     if cfg is None:
         cfg = load_config()
 

@@ -14,18 +14,22 @@ class EventBus:
         self.event_queue: list[Event] = []
 
     def subscribe(self, event_type: type[Event], handler: callable) -> None:
+        """Registers a handler for an event type"""
         if event_type not in self.subscribers:
             self.subscribers[event_type] = []
         self.subscribers[event_type].append(handler)
 
     def unsubscribe(self, event_type: type[Event], handler: callable) -> None:
+        """Removes a handler for an event type"""
         if event_type in self.subscribers:
             self.subscribers[event_type].remove(handler)
 
     def emit(self, event: Event) -> None:
+        """Adds an event to the pending queue"""
         self.event_queue.append(event)
 
     def dispatch(self) -> None:
+        """Delivers queued events to their subscribers"""
         self.event_queue.sort(key=lambda e: -e.priority)
         for event in self.event_queue:
             event_type = type(event)
@@ -39,6 +43,7 @@ class MoveEvent(Event):
     pass
 
 def on_move(event: MoveEvent):
+    """Spends energy when an entity moves"""
     bio = event.source.get_component(Biochemistry)
     if bio: bio.energy = max(0, bio.energy - 2)
 
@@ -47,6 +52,7 @@ class SleepEvent(Event):
     energy_increase: int = 30
 
 def on_sleep(event: SleepEvent):
+    """Restores energy when an entity sleeps"""
     bio = event.source.get_component(Biochemistry)
     if bio: bio.energy = min(bio.energy + event.energy_increase, 200)
 
@@ -55,6 +61,7 @@ class EatEvent(Event):
     nutrition: int = 35
 
 def on_eat(event: EatEvent):
+    """Restores hunger when an entity eats"""
     bio = event.source.get_component(Biochemistry)
     if bio:
         bio.hunger = min(event.nutrition + bio.hunger, 200)

@@ -15,6 +15,7 @@ class WorldConfig:
 
     @property
     def size(self) -> tuple[int, int]:
+        """Returns the world dimensions as a tuple"""
         return (self.width, self.height)
 
 
@@ -130,11 +131,12 @@ class SimConfig:
         return cls(run=run, scenario=scenario, balance=balance)
 
     def to_dict(self) -> dict[str, Any]:
+        """Converts the config to a plain dictionary"""
         return asdict(self)
 
 
 def _section(cls: type, data: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate that ``data`` only contains keys declared by ``cls``."""
+    """Validate that data only contains keys declared by cls."""
     data = dict(data)
     unknown = set(data) - {f.name for f in fields(cls)}
     if unknown:
@@ -156,7 +158,7 @@ def _cli_overrides(argv: list[str] | None) -> dict[str, Any]:
 
 
 def load_config(path: str | Path | None = None, argv: list[str] | None = None) -> SimConfig:
-    """Load a ``SimConfig`` from defaults, an optional TOML file and CLI flags."""
+    """Load a SimConfig from defaults, an optional TOML file and CLI flags."""
     overrides = _cli_overrides(argv)
     if path is None:
         path = overrides.pop("config", None)

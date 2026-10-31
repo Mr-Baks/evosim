@@ -42,6 +42,7 @@ class Command(ABC):
         pass
 
     def complete(self, entity: Entity, status=CommandStatus.COMPLETED) -> None:
+        """Completes command and clears its running state"""
         queue = entity.get_component(CommandQueue)
         state = entity.get_component(State)
 
@@ -74,6 +75,7 @@ class CommandGroup(Command):
             self.priority = max(self.priority, c.priority)
 
     def on_interruption(self, entity: Entity):
+        """Cancels queued commands and interrupts the running subcommand"""
         for c in self._queue.queue:
             c.complete(entity, status=CommandStatus.CANCELLED)
 
@@ -84,6 +86,7 @@ class CommandGroup(Command):
         self.complete(entity, status=CommandStatus.INTERRUPTED)
 
     def execute(self, entity: Entity, world: World):
+        """Runs the current ready subcommand in sequence"""
         if not self._queue.running or self._queue.running.target_status != CommandStatus.RUNNING:
             self._queue.queue = [cmd for cmd in self._queue.queue if cmd.target_status == CommandStatus.PENDING]
             for i, cmd in enumerate(self._queue.queue):
@@ -102,6 +105,7 @@ class CommandGroup(Command):
         self._queue.running.execute(entity, world)
         
 def push_command(entity: Entity, world: World, *commands: Command, target_state: Optional[str] = None) -> None:
+    """Queues a command or command group with priority ordering"""
     if len(commands) > 1:
         command = CommandGroup(list(commands), target_state=target_state)
     else:
@@ -139,9 +143,11 @@ class EatCommand(Command):
     target_y: int = 0
 
     def is_ready(self, entity: Entity, world: World):
+        """Checks whether the target food is within reach"""
         return abs(self.target_x - entity.x) < 2 and abs(self.target_y - entity.y) < 2
     
     def execute(self, entity: Entity, world: World):
+        """Consumes target food and completes the command"""
         food = world.get_entity(self.target_x, self.target_y)
         if not food: 
             self.complete(entity, status=CommandStatus.FAILED)
@@ -160,6 +166,7 @@ class DeathCommand(Command):
     corpse_nutrition: int = 0
 
     def execute(self, entity: Entity, world: World):
+        """Removes the entity and optionally leaves a corpse"""
         world.remove_entity(entity)
         if self.corpse_nutrition != 0:
             corpse = Entity().add_component(Eatable(self.corpse_nutrition)).add_component(Render(symbol='D', color=(255, 0, 0)))
@@ -174,6 +181,7 @@ class SleepCommand(Command):
     energy_increase: int = 50
 
     def execute(self, entity: Entity, world: World):
+        """Restores energy over the configured number of ticks"""
         self.ticks_to_sleep -= 1
         world.event_bus.emit(SleepEvent(source=entity, energy_increase=self.energy_increase))
 
@@ -328,6 +336,7 @@ class MoveToTargetCommand(Command):
         return True
 
     def execute(self, entity: Entity, world: World):
+        """Advances the entity toward the target along its path"""
         if self.x == entity.x and self.y == entity.y:
             self.complete(entity)
             return
@@ -378,6 +387,7 @@ class WanderCommand(Command):
         return creatures * traits.crowd_preference * (1 - starvation / 2) + plants * traits.plant_appetence * (1 - starvation) + food * starvation * traits.food_appetence
 
     def point_utility(self, x: int, y: int, entity: Entity, world: World, scan_radius: int = 3, traits: Traits | None = None, starvation: float | None = None) -> float:
+        """Scores a candidate wander point from local perception"""
         if traits is None or starvation is None:
             bio: Biochemistry = entity.get_component(Biochemistry)
             genome: Genome = entity.get_component(Genome)
@@ -389,6 +399,7 @@ class WanderCommand(Command):
         return self._point_utility(x, y, entity, world, scan_radius, traits, starvation)
 
     def execute(self, entity: Entity, world: World):
+        """Selects a wander target and starts moving toward it"""
         bio: Biochemistry = entity.get_component(Biochemistry)
         genome: Genome = entity.get_component(Genome)
         if bio and genome:
@@ -434,6 +445,7 @@ def _get_component(entity: Entity, component_type: type[Component]) -> Component
     return component
 
 def create_entity_from_genome(genome: Genome, base_entity: Entity | None = None) -> Entity:
+    """Builds or updates a creature from its genome"""
     if base_entity is None:
         base_entity = Entity()
 
@@ -461,6 +473,7 @@ def create_entity_from_genome(genome: Genome, base_entity: Entity | None = None)
     return base_entity
 
 def create_child(parent1: Entity, parent2: Entity, world: World):
+    """Creates a child by recombining both parents' genomes"""
     child = Entity()
 
     components = set(parent1.components_dict.keys()) | set(parent2.components_dict.keys())
@@ -480,11 +493,13 @@ class MateCommand(Command):
     partner: Entity = None
 
     def is_ready(self, entity, world):
+        """Checks whether both partners are adjacent and ready"""
         if abs(entity.x - self.partner.x) > 1 or abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0 or entity.get_component(Breedable).cooldown > 0:
             return False
         return True
 
     def execute(self, entity, world):
+        """Mates with the partner and places the child nearby"""
         genome1: Genome = entity.get_component(Genome)
         genome2: Genome = self.partner.get_component(Genome)
         bio1: Biochemistry = entity.get_component(Biochemistry)

@@ -5,11 +5,11 @@ Usage:
     python experiments/runner.py --config my.toml --conditions jitter_0.1 --seeds 1 --ticks 5000
     python experiments/runner.py --conditions baseline crowd_off --seeds 1 2 --jobs 4
 
-Each run writes ``config.json``, ``population.csv``, ``features.csv``,
-``births.csv`` and ``deaths.csv`` to
-``<out>/<experiment>/<condition>/seed=<seed>/``. The fixed run plan and feature
-schema are written to ``<out>/<experiment>/matrix.json`` before the simulations
-start. Final counts for the whole batch go to ``<out>/<experiment>/summary.csv``.
+Each run writes config.json, population.csv, features.csv,
+births.csv and deaths.csv to
+<out>/<experiment>/<condition>/seed=<seed>/. The fixed run plan and feature
+schema are written to <out>/<experiment>/matrix.json before the simulations
+start. Final counts for the whole batch go to <out>/<experiment>/summary.csv.
 """
 import argparse
 import csv
@@ -66,6 +66,7 @@ CONDITIONS = {
 
 
 def run(spec: RunSpec) -> dict:
+    """Runs one experiment specification and returns its summary"""
     run_dir = Path(spec.config.run.output_dir)
     dump_config(spec.config, run_dir / 'config.json')
 
@@ -108,6 +109,7 @@ def run(spec: RunSpec) -> dict:
     }
 
 def parse_args(argv=None):
+    """Parses command-line experiment options"""
     parser = argparse.ArgumentParser(description='Run a minimal EvoSim experiment')
     parser.add_argument('--experiment', default='main')
     parser.add_argument('--config', default=None)
@@ -162,6 +164,7 @@ def _run_specs(specs: list[RunSpec], jobs: int) -> list[dict]:
         return list(executor.map(run, specs))
 
 def main_cli(argv=None) -> int:
+    """Runs the experiment matrix and writes its summary"""
     args = parse_args(argv)
     base_cfg = load_config(args.config, argv=[])
     ticks = args.ticks if args.ticks is not None else base_cfg.run.ticks

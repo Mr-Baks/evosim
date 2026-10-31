@@ -15,10 +15,12 @@ class Gene:
 
     @property
     def phenotype(self) -> float:
+        """Returns the dominance-weighted allele value"""
         a_min, a_max = sorted((self.allele1, self.allele2))
         return a_max * self.dominance + a_min * (1 - self.dominance)
 
     def crossover(self, gene: Gene, mutation_rate: float = 0.05, strength: float = 0.1) -> Gene:
+        """Produces a recombined gene with optional mutation"""
         a1 = self.allele1 if random.random() < 0.5 else self.allele2
         a2 = gene.allele1 if random.random() < 0.5 else gene.allele2
 
@@ -64,14 +66,17 @@ class Genome(Component):
                 self.genes[g.name] = g
 
     def add_gene(self, gene: Gene) -> None:
+        """Adds or replaces a gene by name"""
         self.genes[gene.name] = gene
 
     def remove_gene(self, name: str) -> Optional[Gene]:
+        """Removes and returns a gene by name"""
         if name in self.genes:
             return self.genes.pop(name)
         return None
 
     def get_phenotype(self, name: str, scaling: tuple[float, float] | None = None, default: float = None, log: bool = False) -> float | None:
+        """Returns a scaled gene phenotype or a default"""
         if name in self.genes:
             raw_phenotype = self.genes[name].phenotype
             if scaling is None: 
@@ -87,6 +92,7 @@ class Genome(Component):
         return default
 
     def recombine(self, genome: Genome, mutation_rate: float = 0.1, strength: float = 0.3) -> Genome:
+        """Creates a child genome from two parent genomes"""
         genes = []
         gene_names = sorted(set(self.genes.keys()).union(set(genome.genes.keys())))
 
