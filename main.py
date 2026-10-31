@@ -66,6 +66,7 @@ def make_plant(x, y, world: World, cfg: SimConfig):
 
 def tick_stats(sim: Simulation):
     """Prints current creature, food and mean speed statistics"""
+    if sim.tick % sim.fps != 0: return
     food_amount = len(sim.world.index.get_with(Eatable))
     creatures_amount = len(sim.world.index.get_with(Movable))
 
