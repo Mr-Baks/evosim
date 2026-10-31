@@ -34,6 +34,9 @@ heredity-based genetics.
   `Lineage(generation, parents_eid)`; founders start at generation `0`, children
   get `max(parents) + 1`
 - **Plants** – stationary energy sources that grow and drop fruit
+- **Reproducible experiments** – tracked `experiments/runner.py` runs
+  condition × seed matrices, writes a fixed feature matrix and supports
+  process-based parallelism
 - **Modular & extensible** – add components, commands, genes or event handlers
   without touching the core loop
 
@@ -111,6 +114,7 @@ evosim/
 ├── simulation.py     # Main loop, fixed timestep, rendering, system scheduling
 ├── event_bus.py      # EventBus, event types and default handlers
 ├── logger.py         # RunLogger: CSV telemetry for population, features, births and deaths
+├── experiments/      # Tracked experiment runner (conditions × seeds, features, parallel)
 ├── logs/             # Runtime logs (git-ignored): error_log.txt, last_tick.txt
 └── tests/            # Unit/integration tests
 ```
@@ -221,8 +225,8 @@ and are not the values used for offspring.
 
 ### Lineage & Generations
 
-`Lineage` is a plain component added by `make_creature` and copied to every
-child by `create_child`. `MateCommand` then sets:
+`Lineage` is a plain component added by `create_entity_from_genome` (used by
+both `make_creature` and `create_child`). `MateCommand` then sets:
 
 ```python
 lineage = child.get_component(Lineage)
@@ -237,7 +241,7 @@ lineage.parents_eid = (parent2.eid, parent1.eid)
 - `Lineage` is **not** a system requirement: `decision_system` works without it,
   so older fixtures and non-creature entities keep working.
 
-The repository includes a minimal experiment runner at
+The repository includes a tracked experiment runner at
 `experiments/runner.py`. It runs a condition × seed matrix, writes the resolved
 `config.json` and the standard `population.csv` / `features.csv` / `births.csv`
 / `deaths.csv` for every run, and collects final counts in `summary.csv`.
@@ -269,7 +273,27 @@ Runs can execute sequentially or in parallel:
 ```bash
 python experiments/runner.py \
   --conditions baseline crowd_off exploration_off \
-  --seeds 1 2 3 4 5 --ticks 20000 --jobs 4
+  --seeds 1 2 3 4 5 --ticks 20000 \
+  --sample-every 500 --out results/experiments --jobs 4
+```
+
+Available conditions are `baseline`, `jitter_0.1`, `crowd_off`,
+`exploration_off`, `plant_off` and `food_off`. The `*_off` conditions replace
+both founder alleles of the corresponding gene with `0.0`; they are founder
+perturbations, not permanent knockouts, because mutation can restore the trait.
+
+The output layout is:
+
+```text
+<out>/<experiment>/
+├── matrix.json
+├── summary.csv
+└── <condition>/seed=<seed>/
+    ├── config.json
+    ├── population.csv
+    ├── features.csv
+    ├── births.csv
+    └── deaths.csv
 ```
 
 Parallel runs use `ProcessPoolExecutor`. Every run reseeds the global RNG with
@@ -613,10 +637,12 @@ to a chosen path for reproducibility; `main` does not call it automatically.
 
 ### Basic telemetry
 
-`main()` writes three CSVs into `cfg.run.output_dir` (default `results/`):
+`main()` writes four CSVs into `cfg.run.output_dir` (default `results/`):
 
 - `population.csv` – `tick`, creature/plant/food counts, mean energy, hunger,
   age and speed, sampled every `record_every` ticks (tick `0` is included).
+- `features.csv` – the fixed per-tick gene/trait feature matrix described
+  above (mean phenotypes, allele means, generations and derived traits).
 - `births.csv` – `tick`, child eid, both parent eids and the child's generation.
 - `deaths.csv` – `tick`, eid, age, generation, energy, hunger, health and
   max health at death.
@@ -734,6 +760,12 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - `tests/test_config.py` – config validation/roundtrip, genome-derived founder
   components, and founder jitter (same delta per locus, colour genes excluded,
   boundary handling, independent founders).
+- `tests/test_features.py` – stable feature header, empty-population rows and
+  living-population aggregation for the fixed gene/trait matrix.
+- `tests/test_experiment_runner.py` – runner smoke test, `matrix.json` contents,
+  feature CSV shape, config overrides and parallel-vs-serial determinism.
+- `tests/test_world.py` and `tests/test_commands.py` – spatial queries,
+  count helpers, command utilities and point-utility behaviour.
 
 ## Current Limitations & Roadmap
 
@@ -746,11 +778,12 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   `logs/` directory must exist (a `.gitkeep` is committed). `main()` installs
   `RunLogger`, which writes population, feature-matrix, birth and death CSVs to
   `cfg.run.output_dir`.
-- **Minimal experiment runner** – `experiments/runner.py` covers a condition ×
-  seed matrix, writes standard CSVs plus `config.json`, a fixed
-  `features.csv` matrix, `matrix.json` and `summary.csv`, and supports
-  `--jobs` for process-based parallelism. It has no resume or full provenance
-  manifest; `matrix.json` freezes the run plan and feature columns only.
+- **Experiment runner** – the tracked `experiments/runner.py` is the supported
+  path. It covers a condition × seed matrix, writes standard CSVs plus
+  `config.json`, a fixed `features.csv` matrix, `matrix.json` and `summary.csv`,
+  and supports `--jobs` for process-based parallelism. 
+  `matrix.json` freezes the run plan and feature columns
+  but not the git commit, dirty state or package versions.
 - **Founder variation** – `founder_genes` is the shared baseline. The
   jitter defaults to `0.0` (identical founders); set
   `founder_genes_jitter=0.1` for independent per-locus standing variation.
