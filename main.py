@@ -8,6 +8,7 @@ from commands import *
 from config import SimConfig, load_config, FounderGene
 from entity import *
 from event_bus import BirthEvent, DeathEvent, EatEvent, Event, EventBus, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
+from features import feature_header, log_features
 from genome import Gene, GeneNames, Genome
 from logger import RunLogger
 from simulation import Simulation
@@ -139,6 +140,11 @@ def build_logger(sim: Simulation, cfg: SimConfig) -> RunLogger:
     logger.add_query(
         'population', log_population,
         ['tick', 'creatures', 'plants', 'food', 'mean_energy', 'mean_hunger', 'mean_age', 'mean_speed'],
+        every=period,
+    )
+    logger.add_query(
+        'features', log_features,
+        feature_header(),
         every=period,
     )
     logger.add_event_query(

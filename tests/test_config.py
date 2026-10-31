@@ -207,10 +207,38 @@ class TestMainWiring:
         )
         sim = main.build_simulation(cfg)
         assert sim.tick == 0
-        # _scatter skips occupied cells, so exact counts are not guaranteed;
-        # the point is that the tiny scenario counts (not 120/40) are used.
-        assert 0 < len(sim.world.index.get_with(Movable)) <= 3
-        assert 0 < len(sim.world.index.get_with(Plant)) <= 5
+        assert len(sim.world.index.get_with(Plant)) == 5
+        assert len(sim.world.index.get_with(Movable)) == 3
+
+    def test_scatter_raises_when_world_has_not_enough_space(self):
+        cfg = SimConfig(
+            run=RunConfig(seed=123, headless=True),
+            scenario=ScenarioConfig(
+                world=WorldConfig(2, 2),
+                initial_plants=5,
+                initial_creatures=0,
+            ),
+        )
+
+        with pytest.raises(ValueError, match="only 4 free cells are available"):
+            main.build_simulation(cfg)
+
+    def test_scatter_places_overlapping_counts_on_distinct_cells(self):
+        cfg = SimConfig(
+            run=RunConfig(seed=123, headless=True),
+            scenario=ScenarioConfig(
+                world=WorldConfig(2, 2),
+                initial_plants=2,
+                initial_creatures=2,
+            ),
+        )
+        sim = main.build_simulation(cfg)
+
+        assert len(sim.world.index.get_with(Plant)) == 2
+        assert len(sim.world.index.get_with(Movable)) == 2
+        for y in range(2):
+            for x in range(2):
+                assert sim.world.get_entity(x, y) is not None
 
     def test_headless_run_advances_ticks(self):
         cfg = SimConfig(

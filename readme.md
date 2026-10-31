@@ -104,12 +104,13 @@ evosim/
 ├── entity.py         # Entity, Component base classes and all component types (except Genome)
 ├── genome.py         # Gene, GeneNames, Genome (heredity, recombination, mutation)
 ├── traits.py         # Phenotype: gene -> derived Traits + physiology formulas
+├── features.py       # Fixed per-tick gene/trait feature matrix for telemetry
 ├── world.py          # World grid, QueryIndex (ECS query engine), spatial queries
 ├── commands.py       # Command base, CommandQueue, CommandGroup, all commands, A* pathfinding
 ├── systems.py        # Simulation systems (decision, command, vision, biochemistry, plant, logging)
 ├── simulation.py     # Main loop, fixed timestep, rendering, system scheduling
 ├── event_bus.py      # EventBus, event types and default handlers
-├── logger.py         # RunLogger: CSV telemetry for population, births and deaths
+├── logger.py         # RunLogger: CSV telemetry for population, features, births and deaths
 ├── logs/             # Runtime logs (git-ignored): error_log.txt, last_tick.txt
 └── tests/            # Unit/integration tests
 ```
@@ -236,10 +237,46 @@ lineage.parents_eid = (parent2.eid, parent1.eid)
 - `Lineage` is **not** a system requirement: `decision_system` works without it,
   so older fixtures and non-creature entities keep working.
 
-The repository does **not** include an experiment runner or built-in
-`generation_mean` / `generation_max` summaries. `Lineage.generation` is stored
-on every creature created by `make_creature` / `create_child`; an experiment
-script must collect it itself.
+The repository includes a minimal experiment runner at
+`experiments/runner.py`. It runs a condition × seed matrix, writes the resolved
+`config.json` and the standard `population.csv` / `features.csv` / `births.csv`
+/ `deaths.csv` for every run, and collects final counts in `summary.csv`.
+
+Before starting any simulation, the runner writes `<experiment>/matrix.json`.
+It freezes the experiment plan and the telemetry schema: conditions, seeds,
+ticks, sampling period, worker count, run directories, the ordered gene list,
+the ordered derived-trait list, and the exact `features.csv` columns. Editing
+`GENE_NAMES` or `TRAIT_COLUMNS` in `features.py` changes that schema for all
+runs and is recorded in the matrix, so old and new results are not silently
+mixed.
+
+`features.csv` is sampled every `record_every` ticks over the living
+population. It contains one row per sample with:
+
+- `tick`, `n`;
+- mean phenotype and mean allele value for every gene (dominance-aware
+  phenotype and `(allele1 + allele2) / 2`, respectively);
+- mean and maximum `Lineage.generation`;
+- mean derived traits from `traits_for(genome)`, including nested speed, wear,
+  colour and vision components.
+
+The column order is fixed by `feature_header()` in `features.py`, not inferred
+from the current population. Empty samples keep the same width and use zeroes
+for the aggregate fields.
+
+Runs can execute sequentially or in parallel:
+
+```bash
+python experiments/runner.py \
+  --conditions baseline crowd_off exploration_off \
+  --seeds 1 2 3 4 5 --ticks 20000 --jobs 4
+```
+
+Parallel runs use `ProcessPoolExecutor`. Every run reseeds the global RNG with
+its own seed and writes to its own directory, so the result does not depend on
+worker scheduling. The runner still has no resume or full provenance manifest;
+`matrix.json` records the execution plan and feature schema, not the git commit
+or package versions. See the module docstring for the CLI.
 
 ### Command Queue
 
@@ -634,8 +671,10 @@ derives `Render.color`, `Movable.speed`, `Breedable.fertility` and
 `fructify_threshold` in `[plant_fructify_min, plant_fructify_max]`.
 `make_creature()`, `make_food()`, and `make_plant()` place the new entity in
 the world and return `None`; use `world.get_entity(x, y)` if you need it.
-`_scatter` skips occupied cells without retrying, so the actual initial counts
-can be slightly below `initial_plants` / `initial_creatures`.
+`_scatter` places exactly `initial_plants` / `initial_creatures` entities on
+distinct free cells using `random.sample`. If the world has fewer free cells
+than requested, `build_simulation` raises `ValueError` instead of silently
+placing fewer entities.
 
 ## Extending the Simulation
 
@@ -705,12 +744,13 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - **Logging** – command failures go to `logs/error_log.txt`, and the interactive
   `logging_system` writes a per-tick snapshot to `logs/last_tick.txt`. The
   `logs/` directory must exist (a `.gitkeep` is committed). `main()` installs
-  `RunLogger`, which writes basic population/birth/death CSVs to
+  `RunLogger`, which writes population, feature-matrix, birth and death CSVs to
   `cfg.run.output_dir`.
-- **No experiment runner** – the basic logger does not export trait,
-  behaviour or generation summaries, and there is no condition × seed matrix
-  runner yet. Subscribe to `BirthEvent` / `DeathEvent` or add `RunLogger`
-  queries for experiment-specific data.
+- **Minimal experiment runner** – `experiments/runner.py` covers a condition ×
+  seed matrix, writes standard CSVs plus `config.json`, a fixed
+  `features.csv` matrix, `matrix.json` and `summary.csv`, and supports
+  `--jobs` for process-based parallelism. It has no resume or full provenance
+  manifest; `matrix.json` freezes the run plan and feature columns only.
 - **Founder variation** – `founder_genes` is the shared baseline. The
   jitter defaults to `0.0` (identical founders); set
   `founder_genes_jitter=0.1` for independent per-locus standing variation.
