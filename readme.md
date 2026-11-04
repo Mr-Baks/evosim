@@ -114,7 +114,7 @@ evosim/
 ├── simulation.py     # Main loop, fixed timestep, rendering, system scheduling
 ├── event_bus.py      # EventBus, event types and default handlers
 ├── logger.py         # RunLogger: CSV telemetry for population, features, cohorts, births and deaths
-├── experiments/      # Tracked experiment runner (conditions × seeds, features, parallel)
+├── experiments/      # Tracked runner and cross-seed aggregator (conditions × seeds, features)
 ├── logs/             # Runtime logs (git-ignored): error_log.txt, last_tick.txt
 └── tests/            # Unit/integration tests
 ```
@@ -307,6 +307,26 @@ its own seed and writes to its own directory, so the result does not depend on
 worker scheduling. The runner still has no resume or full provenance manifest;
 `matrix.json` records the execution plan and feature schema, not the git commit
 or package versions. See the module docstring for the CLI.
+
+After the runs, `experiments/aggregate.py` combines them without pooling
+individuals across seeds:
+
+```bash
+python experiments/aggregate.py baseline_40k --root results/experiments
+```
+
+It reads the experiment's `matrix.json` and writes:
+
+- `aggregate.csv` – per-tick `mean`, sample `sd`, 95% CI and `runs` for every
+  numeric metric in `population.csv`, `features.csv` and `summary.csv`;
+- `cohort_aggregate.csv` – the same statistics for `birth_features.csv`,
+  grouped into generation bins (`--generation-bin`, default `25`).
+
+`runs` is the number of seeds contributing a value at that tick or generation
+bin; it is not the number of individuals. Missing files and older matrices
+without a `birth_features` schema are skipped rather than treated as failures.
+The aggregator does not hard-code condition names, so conditions can come from
+the matrix or from a fixed TOML configuration without changing the code.
 
 ### Command Queue
 
@@ -794,6 +814,8 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
   living-population aggregation for the fixed gene/trait matrix.
 - `tests/test_experiment_runner.py` – runner smoke test, `matrix.json` contents,
   feature CSV shape, config overrides and parallel-vs-serial determinism.
+- `tests/test_aggregate.py` – seed-level aggregation, 95% CI, generation-bin
+  cohorts and fallback for old experiments without cohort files.
 - `tests/test_world.py` and `tests/test_commands.py` – spatial queries,
   count helpers, command utilities and point-utility behaviour.
 
