@@ -5,6 +5,7 @@ from commands import create_child
 from config import RunConfig, ScenarioConfig, SimConfig, WorldConfig
 from entity import Biochemistry, Lineage, Movable, Plant
 from event_bus import BirthEvent, DeathEvent
+from features import birth_feature_header
 
 
 def _cfg(tmp_path, initial_creatures=0, initial_plants=0):
@@ -69,6 +70,12 @@ def test_build_logger_records_births(tmp_path):
     rows = _read(tmp_path / 'out' / 'births.csv')
     assert rows[0] == ['tick', 'child_eid', 'parent1_eid', 'parent2_eid', 'generation']
     assert rows[1] == ['0', str(child.eid), str(parent1.eid), str(parent2.eid), '1']
+
+    cohort = _read(tmp_path / 'out' / 'birth_features.csv')
+    assert cohort[0] == birth_feature_header()
+    assert cohort[1][0] == '0'
+    assert cohort[1][1] == str(child.eid)
+    assert cohort[1][4] == '1'
 
 
 def test_build_logger_records_deaths(tmp_path):

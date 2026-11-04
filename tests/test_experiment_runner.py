@@ -4,7 +4,7 @@ import json
 import pytest
 
 from experiments import runner
-from features import GENE_NAMES, TRAIT_COLUMNS, feature_header
+from features import GENE_NAMES, TRAIT_COLUMNS, birth_feature_header, feature_header
 from genome import GeneNames
 
 
@@ -40,6 +40,10 @@ def test_minimal_runner_writes_runs_and_summary(tmp_path):
     assert matrix['features']['genes'] == list(GENE_NAMES)
     assert matrix['features']['traits'] == list(TRAIT_COLUMNS)
     assert matrix['features']['columns'] == feature_header()
+    assert matrix['birth_features'] == {
+        'file': 'birth_features.csv',
+        'columns': birth_feature_header(),
+    }
     assert len(matrix['runs']) == 2
 
     with open(base / 'baseline' / 'seed=1' / 'features.csv', newline='') as file:
@@ -49,6 +53,12 @@ def test_minimal_runner_writes_runs_and_summary(tmp_path):
     assert [row[0] for row in feature_rows[1:]] == ['0', '5']
     assert feature_rows[1][1] == '100'
     assert all(len(row) == len(feature_header()) for row in feature_rows)
+
+    with open(base / 'baseline' / 'seed=1' / 'birth_features.csv', newline='') as file:
+        cohort_rows = list(csv.reader(file))
+
+    assert cohort_rows[0] == birth_feature_header()
+    assert all(len(row) == len(birth_feature_header()) for row in cohort_rows)
 
     baseline = json.loads((base / 'baseline' / 'seed=1' / 'config.json').read_text())
     assert baseline['run']['headless'] is True

@@ -113,7 +113,7 @@ evosim/
 ├── systems.py        # Simulation systems (decision, command, vision, biochemistry, plant, logging)
 ├── simulation.py     # Main loop, fixed timestep, rendering, system scheduling
 ├── event_bus.py      # EventBus, event types and default handlers
-├── logger.py         # RunLogger: CSV telemetry for population, features, births and deaths
+├── logger.py         # RunLogger: CSV telemetry for population, features, cohorts, births and deaths
 ├── experiments/      # Tracked experiment runner (conditions × seeds, features, parallel)
 ├── logs/             # Runtime logs (git-ignored): error_log.txt, last_tick.txt
 └── tests/            # Unit/integration tests
@@ -243,16 +243,18 @@ lineage.parents_eid = (parent2.eid, parent1.eid)
 
 The repository includes a tracked experiment runner at
 `experiments/runner.py`. It runs a condition × seed matrix, writes the resolved
-`config.json` and the standard `population.csv` / `features.csv` / `births.csv`
-/ `deaths.csv` for every run, and collects final counts in `summary.csv`.
+`config.json` and the standard `population.csv` / `features.csv` /
+`birth_features.csv` / `births.csv` / `deaths.csv` for every run, and collects
+final counts in `summary.csv`.
 
 Before starting any simulation, the runner writes `<experiment>/matrix.json`.
 It freezes the experiment plan and the telemetry schema: conditions, seeds,
 ticks, sampling period, worker count, run directories, the ordered gene list,
-the ordered derived-trait list, and the exact `features.csv` columns. Editing
-`GENE_NAMES` or `TRAIT_COLUMNS` in `features.py` changes that schema for all
-runs and is recorded in the matrix, so old and new results are not silently
-mixed.
+the ordered derived-trait list, the exact `features.csv` columns, and the
+`birth_features.csv` schema. Editing `GENE_NAMES`, `TRAIT_COLUMNS`,
+`AGGREGATE_COLUMNS` or `birth_feature_header()` in `features.py` changes that
+schema for all runs and is recorded in the matrix, so old and new results are
+not silently mixed.
 
 `features.csv` is sampled every `record_every` ticks over the living
 population. It contains one row per sample with:
@@ -262,7 +264,10 @@ population. It contains one row per sample with:
   phenotype and `(allele1 + allele2) / 2`, respectively);
 - mean and maximum `Lineage.generation`;
 - mean derived traits from `traits_for(genome)`, including nested speed,
-  metabolism, wear, colour and vision components.
+  metabolism, wear, colour and vision components;
+- spatial aggregates: mean number of creature neighbours within radius 5,
+  mean nearest-neighbour distance, and the fraction of creatures with negative
+  or positive `crowd_preference`.
 
 The column order is fixed by `feature_header()` in `features.py`, not inferred
 from the current population. Empty samples keep the same width and use zeroes
@@ -292,6 +297,7 @@ The output layout is:
     ├── config.json
     ├── population.csv
     ├── features.csv
+    ├── birth_features.csv
     ├── births.csv
     └── deaths.csv
 ```
@@ -661,8 +667,12 @@ to a chosen path for reproducibility; `main` does not call it automatically.
 
 - `population.csv` – `tick`, creature/plant/food counts, mean energy, hunger,
   age and speed, sampled every `record_every` ticks (tick `0` is included).
-- `features.csv` – the fixed per-tick gene/trait feature matrix described
-  above (mean phenotypes, allele means, generations and derived traits).
+- `features.csv` – the fixed per-tick living-population matrix described above
+  (mean phenotypes, allele means, generations, derived traits and spatial
+  aggregates).
+- `birth_features.csv` – one row per birth with the child's eid, parent eids,
+  generation, gene phenotypes/alleles and derived traits; use this for
+  birth-cohort selection analysis rather than survivor-only snapshots.
 - `births.csv` – `tick`, child eid, both parent eids and the child's generation.
 - `deaths.csv` – `tick`, eid, age, generation, energy, hunger, health and
   max health at death.

@@ -6,7 +6,7 @@ Usage:
     python experiments/runner.py --conditions baseline crowd_off --seeds 1 2 --jobs 4
 
 Each run writes config.json, population.csv, features.csv,
-births.csv and deaths.csv to
+birth_features.csv, births.csv and deaths.csv to
 <out>/<experiment>/<condition>/seed=<seed>/. The fixed run plan and feature
 schema are written to <out>/<experiment>/matrix.json before the simulations
 start. Final counts for the whole batch go to <out>/<experiment>/summary.csv.
@@ -27,7 +27,7 @@ import main
 from config import SimConfig, dump_config, load_config
 from entity import Eatable, Lineage, Movable, Plant
 from event_bus import BirthEvent, DeathEvent
-from features import GENE_NAMES, TRAIT_COLUMNS, feature_header
+from features import GENE_NAMES, TRAIT_COLUMNS, birth_feature_header, feature_header
 from genome import GeneNames
 
 
@@ -141,6 +141,10 @@ def _write_matrix(path: Path, experiment: str, conditions: list[str], seeds: lis
             'genes': list(GENE_NAMES),
             'traits': list(TRAIT_COLUMNS),
             'columns': feature_header(),
+        },
+        'birth_features': {
+            'file': 'birth_features.csv',
+            'columns': birth_feature_header(),
         },
         'runs': [
             {

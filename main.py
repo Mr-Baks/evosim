@@ -8,7 +8,7 @@ from commands import create_entity_from_genome, CommandQueue
 from config import SimConfig, load_config, FounderGene
 from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Lineage, Vision
 from event_bus import BirthEvent, DeathEvent, EatEvent, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
-from features import feature_header, log_features
+from features import birth_feature_header, feature_header, log_birth_features, log_features
 from genome import Gene, GeneNames, Genome
 from logger import RunLogger
 from simulation import Simulation
@@ -66,7 +66,6 @@ def make_plant(x, y, world: World, cfg: SimConfig):
 
 def tick_stats(sim: Simulation):
     """Prints current creature, food and mean speed statistics"""
-    if sim.tick % sim.fps != 0: return
     food_amount = len(sim.world.index.get_with(Eatable))
     creatures_amount = len(sim.world.index.get_with(Movable))
 
@@ -159,6 +158,10 @@ def build_logger(sim: Simulation, cfg: SimConfig) -> RunLogger:
     logger.add_event_query(
         'births', BirthEvent, log_birth,
         ['tick', 'child_eid', 'parent1_eid', 'parent2_eid', 'generation'],
+    )
+    logger.add_event_query(
+        'birth_features', BirthEvent, log_birth_features,
+        birth_feature_header(),
     )
     logger.add_event_query(
         'deaths', DeathEvent, log_death,
