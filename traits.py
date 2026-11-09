@@ -1,8 +1,11 @@
+import math
 from dataclasses import dataclass
 from genome import GeneNames, Genome
+from entity import FoodTypes
 
 MAX_HEALTH = 100
 HUNGER_COST_SCALE = 710
+GENERALIST_COST: float = 0.5
 
 @dataclass(frozen=True)
 class Metabolism:
@@ -51,6 +54,8 @@ class Traits:
     plant_appetence: float
     food_appetence: float
     vision: Vision
+    fruit_digestibility: float
+    corpse_digestibility: float
 
     def wear(self, age: float) -> float:
         """Fraction of the lifespan used at age, capped at 1."""
@@ -72,9 +77,30 @@ class Traits:
         """Hunger spent per tick; fast, long-lived bodies need more fuel."""
         return (self.wear_resistance.aging / HUNGER_COST_SCALE) * (self.metabolism.metabolic / 0.5) * self.speed.metabolic * 0.5 * self.vision.metabolic
 
-    def hunger_gain(self, nutrition: int) -> float:
+    def _digestibility_efficiencies(self) -> dict[FoodTypes, float]:
+        """Digestive efficiency of every known food type."""
+        affinities = {
+            FoodTypes.FRUIT: self.fruit_digestibility,
+            FoodTypes.CORPSE: self.corpse_digestibility,
+        }
+        total = sum(affinities.values())
+
+        weights = [value / total for value in affinities.values() if value > 0]
+        entropy = -sum(weight * math.log(weight) for weight in weights)
+        max_entropy = math.log(len(affinities)) if len(affinities) > 1 else 0.0
+        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
+        penalty = GENERALIST_COST * normalized_entropy
+
+        return {food_type: value * (1.0 - penalty) for food_type, value in affinities.items()}
+
+    def hunger_gain(self, nutrition: int, decay: float, food_type: FoodTypes) -> float:
         """Satiety restored by food, scaled by digestive efficiency."""
-        return self.metabolism.digestion * nutrition
+        if food_type is None:
+            digestibility = 1.0
+        else:
+            digestibility = self._digestibility_efficiencies().get(food_type, 0.0)
+
+        return self.metabolism.digestion * nutrition * digestibility * (1 - decay)
 
     def effective_fertility(self, vitality: float) -> float:
         """Fertility after the vitality gate and the senescence-shape penalty."""
@@ -132,6 +158,8 @@ def derive(genome: Genome) -> Traits:
             radius=gp(GeneNames.VISION_RADIUS, (1, 10), default=7.5, log=True),
             metabolic=gp(GeneNames.VISION_RADIUS, (1, 1.25), default=1.2, log=True),
         ),
+        fruit_digestibility=gp(GeneNames.FRUIT_DISGESTIBILITY, (0, 1), default=0.5),
+        corpse_digestibility=gp(GeneNames.CORPSE_DISGESTIBILITY, (0, 1), default=0.5),
     )
 
 def traits_for(genome: Genome) -> Traits:

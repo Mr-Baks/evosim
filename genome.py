@@ -56,6 +56,8 @@ class GeneNames:
     PLANT_APPETENCE = 'plant_appetence'
     FOOD_APPETENCE = 'food_appetence'
     VISION_RADIUS = 'vision_radius'
+    FRUIT_DISGESTIBILITY = 'fruit_digestibility'
+    CORPSE_DISGESTIBILITY = 'corpse_digestibility'
 
 class Genome(Component):
     def __init__(self, genes: Optional[list[Gene]] = None):

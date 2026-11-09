@@ -67,7 +67,7 @@ def on_eat(event: EatEvent):
     bio = event.source.get_component(Biochemistry)
     if bio:
         if event.source.has_component(Genome):
-            gain = traits_for(event.source.get_component(Genome)).hunger_gain(event.nutrition)
+            gain = traits_for(event.source.get_component(Genome)).hunger_gain(event.nutrition, 0.0, None)
         else:
             gain = event.nutrition
         bio.hunger = min(gain + bio.hunger, 200)
