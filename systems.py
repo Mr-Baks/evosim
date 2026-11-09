@@ -3,9 +3,10 @@ from config import BalanceConfig
 from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Vision, Breedable, FoodTypes
 from world import World
 from commands import CommandQueue, CommandStatus
-from traits import traits_for
+from traits import traits_for, Traits
 from genome import Genome
 from event_bus import DamageEvent
+from commands import octile
 import random
 
 
@@ -228,6 +229,15 @@ def logging_system(entities: set[Entity], world: World):
     with open('logs/last_tick.txt', 'w+') as l:
         l.write(log)
 
+def rate_food(sx: int, sy: int, food: Entity, traits: Traits):
+    eatable: Eatable = food.get_component(Eatable)
+
+    distance = octile(sx, sy, food.x, food.y)
+    nutrition = traits.hunger_gain(eatable.nutrition, eatable.decay, eatable.food_type)
+    damage = traits.food_damage(eatable.decay, eatable.food_type)
+
+    return nutrition - 0.2 * distance - 0.3 * damage 
+
 def decision_system(entities: set[Entity], world: World):
     """Chooses and queues the highest-utility action"""
     for e in entities:
@@ -258,7 +268,7 @@ def decision_system(entities: set[Entity], world: World):
             else:
                 food_candidates = [ve for ve in vision.visibles if ve.has_component(Eatable)]
             if food_candidates:
-                food_candidates.sort(key=lambda f: (abs(e.x - f.x) + abs(e.y - f.y), f.eid))
+                food_candidates.sort(key=lambda f: (-rate_food(e.x, e.y, f, traits_for(genome)), e.eid))
                 for f in food_candidates:
                     free_cell = world.get_free_cell_near(f)
                     if free_cell and random.random() > world.balance.eat_reconsider_chance:
@@ -317,3 +327,4 @@ def decay_system(entities: list[Entity], world: World):
                 continue
                 
             eatable.decay += corpse_decay_increase
+

@@ -3,13 +3,13 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Breedable, Plant, Lineage, Component, Vision, FoodTypes
 from world import World
-from event_bus import EatEvent, SleepEvent, DeathEvent, MoveEvent, BirthEvent
+from event_bus import EatEvent, SleepEvent, DeathEvent, MoveEvent, BirthEvent, DamageEvent
 import math
 import random
 import heapq
 from typing import Optional
 from genome import Genome
-from traits import Traits, traits_for
+from traits import Traits, traits_for, ROTTED_DAMAGING_THRESHOLD
 
 
 class CommandStatus(Enum):
@@ -156,7 +156,10 @@ class EatCommand(Command):
         eatable = food.get_component(Eatable)
         if eatable:
             world.remove_entity(food)
-            world.event_bus.emit(EatEvent(source=entity, nutrition=eatable.nutrition))
+            world.event_bus.emit(EatEvent(source=entity, eatable=eatable))
+            if eatable.decay > ROTTED_DAMAGING_THRESHOLD and entity.has_component(Genome):
+                world.event_bus.emit(DamageEvent(target=entity, source=food,
+                                                 damage=traits_for(entity.get_component(Genome)).food_damage(eatable.decay, eatable.food_type)))
             self.complete(entity)
         else:
             self.complete(entity, status=CommandStatus.FAILED)

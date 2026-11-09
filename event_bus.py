@@ -1,7 +1,7 @@
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
-from entity import Entity, Biochemistry
+from entity import Entity, Biochemistry, Eatable
 from genome import Genome
 from traits import traits_for
 
@@ -60,16 +60,16 @@ def on_sleep(event: SleepEvent):
 
 @dataclass
 class EatEvent(Event):
-    nutrition: int = 35
+    eatable: Eatable = field(default_factory=Eatable)
 
 def on_eat(event: EatEvent):
     """Restores hunger when an entity eats"""
     bio = event.source.get_component(Biochemistry)
     if bio:
         if event.source.has_component(Genome):
-            gain = traits_for(event.source.get_component(Genome)).hunger_gain(event.nutrition, 0.0, None)
+            gain = traits_for(event.source.get_component(Genome)).hunger_gain(event.eatable.nutrition, event.eatable.decay, event.eatable.food_type)
         else:
-            gain = event.nutrition
+            gain = event.eatable.nutrition * (1 - event.eatable.decay)
         bio.hunger = min(gain + bio.hunger, 200)
 
 @dataclass

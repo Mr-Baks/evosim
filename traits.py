@@ -5,6 +5,9 @@ from entity import FoodTypes
 
 MAX_HEALTH = 100
 HUNGER_COST_SCALE = 710
+MAX_ROTTED_FOOD_DAMAGE: float = 25
+ROTTED_DAMAGING_THRESHOLD: float = 0.8
+ROTTED_BASE_DAMAGE: float = 2
 GENERALIST_COST: float = 0.5
 
 @dataclass(frozen=True)
@@ -101,6 +104,19 @@ class Traits:
             digestibility = self._digestibility_efficiencies().get(food_type, 0.0)
 
         return self.metabolism.digestion * nutrition * digestibility * (1 - decay)
+
+    def food_damage(self, decay: float, food_type: FoodTypes) -> float:
+        "Damage after eating a food."
+        if decay < ROTTED_DAMAGING_THRESHOLD:
+            return 0
+
+        decay = (decay - ROTTED_DAMAGING_THRESHOLD) / (1 - ROTTED_DAMAGING_THRESHOLD)
+        efficiency = self._digestibility_efficiencies().get(food_type)
+        if efficiency is None:
+            return 0
+
+        damage_factor = ROTTED_BASE_DAMAGE + (1 - efficiency) * (MAX_ROTTED_FOOD_DAMAGE - ROTTED_BASE_DAMAGE)
+        return decay * damage_factor
 
     def effective_fertility(self, vitality: float) -> float:
         """Fertility after the vitality gate and the senescence-shape penalty."""
