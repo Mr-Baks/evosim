@@ -80,3 +80,13 @@ class BirthEvent(Event):
 @dataclass
 class DeathEvent(Event):
     age: int = None
+
+@dataclass
+class DamageEvent(Event):
+    target: Entity = None
+    damage: float = 1
+
+def on_damage(event: DamageEvent):
+    biochemistry: Biochemistry = event.target.get_component(Biochemistry)
+    if biochemistry:
+        biochemistry.health = max(0, biochemistry.health - event.damage)

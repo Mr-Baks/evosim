@@ -5,6 +5,7 @@ from world import World
 from commands import CommandQueue, CommandStatus
 from traits import traits_for
 from genome import Genome
+from event_bus import DamageEvent
 import random
 
 
@@ -78,12 +79,12 @@ def biochemistry_system(entities: set[Entity], world: World):
         if breedable:
             breedable.fertility = traits.effective_fertility(bio.vitality) * (1 - crowd_penalty)
 
-        decay = world.balance.health_decay
+        damage = 0
 
         if not queue.running or not isinstance(queue.running, SleepCommand):
             bio.energy = max(0, bio.energy - traits.energy_drain(bio.vitality) * world.balance.metabolic_cost_scale)
             if bio.energy == 0:
-                bio.health = max(bio.health - decay, 0)
+                damage += world.balance.health_decay
 
         bio.hunger = max(bio.hunger - traits.hunger_drain() * world.balance.hunger_cost_scale, 0)
 
@@ -91,7 +92,10 @@ def biochemistry_system(entities: set[Entity], world: World):
             breedable.cooldown = max(breedable.cooldown - 1, 0)
 
         if bio.hunger == 0:
-            bio.health = max(bio.health - decay, 0)
+            damage += world.balance.health_decay
+
+        if damage > 0:
+            world.event_bus.emit(DamageEvent(target=e, damage=damage, source=e))
 
         if (bio.energy > world.balance.regeneration_energy_min and bio.hunger > world.balance.regeneration_hunger_min and bio.health < traits.regeneration_threshold * bio.max_health):
             cost = traits.regeneration_cost()

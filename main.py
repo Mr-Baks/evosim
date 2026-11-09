@@ -7,7 +7,7 @@ import random
 from commands import create_entity_from_genome, CommandQueue
 from config import SimConfig, load_config, FounderGene
 from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Lineage, Vision
-from event_bus import BirthEvent, DeathEvent, EatEvent, MoveEvent, SleepEvent, on_eat, on_move, on_sleep
+from event_bus import BirthEvent, DeathEvent, EatEvent, MoveEvent, SleepEvent, on_eat, on_move, on_sleep, DamageEvent, on_damage
 from features import birth_feature_header, feature_header, log_birth_features, log_features
 from genome import Gene, GeneNames, Genome
 from logger import RunLogger
@@ -179,6 +179,7 @@ def build_simulation(cfg: SimConfig) -> Simulation:
     sim.world.event_bus.subscribe(EatEvent, on_eat)
     sim.world.event_bus.subscribe(SleepEvent, on_sleep)
     sim.world.event_bus.subscribe(MoveEvent, on_move)
+    sim.world.event_bus.subscribe(DamageEvent, on_damage)
 
     if not cfg.run.headless:
         sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome]), logging_system, priority=0)
