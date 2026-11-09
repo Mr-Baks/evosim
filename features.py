@@ -25,6 +25,8 @@ GENE_NAMES = (
     GeneNames.PLANT_APPETENCE,
     GeneNames.FOOD_APPETENCE,
     GeneNames.VISION_RADIUS,
+    GeneNames.FRUIT_DISGESTIBILITY,
+    GeneNames.CORPSE_DISGESTIBILITY,
 )
 
 TRAIT_COLUMNS = (
@@ -53,6 +55,8 @@ TRAIT_COLUMNS = (
     'food_appetence',
     'vision_radius',
     'vision_metabolic',
+    'fruit_digestibility',
+    'corpse_digestibility',
 )
 
 AGGREGATE_COLUMNS = (
@@ -118,6 +122,8 @@ def _trait_values(traits: Traits) -> list[float]:
         traits.food_appetence,
         traits.vision.radius,
         traits.vision.metabolic,
+        traits.fruit_digestibility,
+        traits.corpse_digestibility,
     ]
 
 
