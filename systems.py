@@ -1,6 +1,6 @@
 from commands import CommandQueue, CommandStatus, EatCommand, DeathCommand, SleepCommand, MateCommand, WanderCommand, MoveToTargetCommand, push_command
 from config import BalanceConfig
-from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Vision, Breedable
+from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Vision, Breedable, FoodTypes
 from world import World
 from commands import CommandQueue, CommandStatus
 from traits import traits_for
@@ -115,7 +115,7 @@ def plant_system(entities: set[Entity], world: World):
         if plant.energy > plant.fructify_threshold:
             free_cells = world.get_free_cells_near(e)
             if free_cells:
-                fruit = Entity().add_component(Eatable(nutrition=plant.fruit_nutrition)).add_component(Render(symbol='f', color=(140, 100, 50)))
+                fruit = Entity().add_component(Eatable(nutrition=plant.fruit_nutrition, food_type=FoodTypes.FRUIT)).add_component(Render(symbol='f', color=(140, 100, 50)))
                 plant.energy -= plant.fructify_threshold
                 world.place_entity(fruit, *random.choice(free_cells))
 

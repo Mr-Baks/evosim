@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from enum import Enum
-from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Breedable, Plant, Lineage, Component, Vision
+from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Breedable, Plant, Lineage, Component, Vision, FoodTypes
 from world import World
 from event_bus import EatEvent, SleepEvent, DeathEvent, MoveEvent, BirthEvent
 import math
@@ -169,7 +169,7 @@ class DeathCommand(Command):
         """Removes the entity and optionally leaves a corpse"""
         world.remove_entity(entity)
         if self.corpse_nutrition != 0:
-            corpse = Entity().add_component(Eatable(self.corpse_nutrition)).add_component(Render(symbol='D', color=(255, 0, 0)))
+            corpse = Entity().add_component(Eatable(self.corpse_nutrition, food_type=FoodTypes.CORPSE)).add_component(Render(symbol='D', color=(255, 0, 0)))
             world.place_entity(corpse, entity.x, entity.y)
 
         self.complete(entity, status=CommandStatus.COMPLETED)

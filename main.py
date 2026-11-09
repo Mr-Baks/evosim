@@ -6,7 +6,7 @@ side effects, so experiment runners and tests can reuse build_simulation.
 import random
 from commands import create_entity_from_genome, CommandQueue
 from config import SimConfig, load_config, FounderGene
-from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Lineage, Vision
+from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Plant, Lineage, Vision, FoodTypes
 from event_bus import BirthEvent, DeathEvent, EatEvent, MoveEvent, SleepEvent, on_eat, on_move, on_sleep, DamageEvent, on_damage
 from features import birth_feature_header, feature_header, log_birth_features, log_features
 from genome import Gene, GeneNames, Genome
@@ -51,7 +51,7 @@ def make_creature(x, y, world: World, cfg: SimConfig, color=None):
 
 def make_food(x, y, world: World, nutrition=20):
     """Creates a food entity at the given position"""
-    e = Entity().add_component(Eatable(nutrition))
+    e = Entity().add_component(Eatable(nutrition, food_type=FoodTypes.FRUIT))
     world.place_entity(e, x, y)
 
 def make_plant(x, y, world: World, cfg: SimConfig):

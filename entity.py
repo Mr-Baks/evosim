@@ -1,7 +1,12 @@
 from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional
+from enum import Enum
 
+
+class FoodTypes(Enum):
+    FRUIT = 0
+    CORPSE = 1
 
 @dataclass
 class Component(ABC): pass
@@ -33,7 +38,10 @@ class Biochemistry(Component):
 
 @dataclass
 class Eatable(Component):
-    nutrition: int
+    nutrition: float = 30
+    food_type: FoodTypes = None
+    age: int = 0
+    decay: float = 0
 
 @dataclass
 class Breedable(Component):
