@@ -96,6 +96,9 @@ class BalanceConfig:
     crowd_count_threshold: int = 3
     crowd_radius: int = 5
 
+    corpse_max_age: int = 600
+    fruit_max_age: int = 1000
+
 
 @dataclass(frozen=True)
 class RunConfig:

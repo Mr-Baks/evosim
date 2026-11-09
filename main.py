@@ -12,7 +12,7 @@ from features import birth_feature_header, feature_header, log_birth_features, l
 from genome import Gene, GeneNames, Genome
 from logger import RunLogger
 from simulation import Simulation
-from systems import plant_system, vision_system, command_system, logging_system, decision_system, biochemistry_system
+from systems import plant_system, vision_system, command_system, logging_system, decision_system, biochemistry_system, decay_system
 from world import World
 
 
@@ -189,6 +189,7 @@ def build_simulation(cfg: SimConfig) -> Simulation:
     sim.register_system(frozenset([Vision]), vision_system, priority=200)
     sim.register_system(frozenset([CommandQueue, Biochemistry, Genome]), biochemistry_system, priority=70)
     sim.register_system(frozenset([Plant]), plant_system, priority=75)
+    sim.register_system(frozenset([Eatable]), decay_system, priority=210)
     sim.register_system(frozenset([CommandQueue, State, Biochemistry, Vision, Genome]), decision_system, priority=100)
 
     _scatter(sim, cfg.scenario.initial_plants, lambda x, y: make_plant(x, y, sim.world, cfg))

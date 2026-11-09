@@ -296,3 +296,24 @@ def decision_system(entities: set[Entity], world: World):
                         break
         elif 'idle' not in state.states:
             push_command(e, world, WanderCommand(radius=vision.radius, target_state=action))
+
+def decay_system(entities: list[Entity], world: World):
+    corpse_decay_increase = 1 / world.balance.corpse_max_age
+    fruit_decay_increase = 1 / world.balance.fruit_max_age
+
+    for e in entities:
+        eatable: Eatable = e.get_component(Eatable)
+
+        eatable.age += 1
+        if eatable.food_type == FoodTypes.FRUIT:
+            if eatable.age >= world.balance.fruit_max_age:
+                world.remove_entity(e)
+                continue
+
+            eatable.decay += fruit_decay_increase
+        elif eatable.food_type == FoodTypes.CORPSE:
+            if eatable.age >= world.balance.corpse_max_age:
+                world.remove_entity(e)
+                continue
+                
+            eatable.decay += corpse_decay_increase
