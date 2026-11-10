@@ -236,7 +236,7 @@ def rate_food(sx: int, sy: int, food: Entity, traits: Traits):
     nutrition = traits.hunger_gain(eatable.nutrition, eatable.decay, eatable.food_type)
     damage = traits.food_damage(eatable.decay, eatable.food_type)
 
-    return nutrition - 0.2 * distance - 0.3 * damage 
+    return nutrition - traits.food_distance_weight * distance - traits.food_damage_weight * damage 
 
 def decision_system(entities: set[Entity], world: World):
     """Chooses and queues the highest-utility action"""

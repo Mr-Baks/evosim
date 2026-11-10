@@ -58,6 +58,8 @@ class GeneNames:
     VISION_RADIUS = 'vision_radius'
     FRUIT_DISGESTIBILITY = 'fruit_digestibility'
     CORPSE_DISGESTIBILITY = 'corpse_digestibility'
+    FOOD_DISTANCE_WEIGHT = 'food_distance_weight'
+    FOOD_DAMAGE_WEIGHT = 'food_damage_weight'
 
 class Genome(Component):
     def __init__(self, genes: Optional[list[Gene]] = None):

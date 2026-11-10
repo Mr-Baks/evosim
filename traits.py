@@ -59,6 +59,8 @@ class Traits:
     vision: Vision
     fruit_digestibility: float
     corpse_digestibility: float
+    food_distance_weight: float
+    food_damage_weight: float
 
     def wear(self, age: float) -> float:
         """Fraction of the lifespan used at age, capped at 1."""
@@ -178,6 +180,8 @@ def derive(genome: Genome) -> Traits:
         ),
         fruit_digestibility=gp(GeneNames.FRUIT_DISGESTIBILITY, (0, 1), default=0.5),
         corpse_digestibility=gp(GeneNames.CORPSE_DISGESTIBILITY, (0, 1), default=0.5),
+        food_distance_weight=gp(GeneNames.FOOD_DISTANCE_WEIGHT, (0, 2), default=0.4),
+        food_damage_weight=gp(GeneNames.FOOD_DAMAGE_WEIGHT, (0, 2), default=1.5),
     )
 
 def traits_for(genome: Genome) -> Traits:
