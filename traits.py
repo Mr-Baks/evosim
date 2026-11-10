@@ -87,6 +87,8 @@ class Traits:
             FoodTypes.CORPSE: self.corpse_digestibility,
         }
         total = sum(affinities.values())
+        if total <= 0:
+            return {food_type: 0.0 for food_type in affinities}
 
         weights = [value / total for value in affinities.values() if value > 0]
         entropy = -sum(weight * math.log(weight) for weight in weights)

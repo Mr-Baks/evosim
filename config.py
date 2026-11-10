@@ -39,8 +39,8 @@ DEFAULT_FOUNDER_GENES: tuple[FounderGene, ...] = (
     (GeneNames.PLANT_APPETENCE, 0.5, 0.5, 1),
     (GeneNames.FOOD_APPETENCE, 0.8, 0.8, 1),
     (GeneNames.VISION_RADIUS, 0.76, 0.75, 0.5),
-    (GeneNames.FRUIT_DISGESTIBILITY, 0.9, 0.9, 1),
-    (GeneNames.CORPSE_DISGESTIBILITY, -0.76, -0.75, 1),
+    (GeneNames.FRUIT_DISGESTIBILITY, 1, 1, 0.5),
+    (GeneNames.CORPSE_DISGESTIBILITY, -1, -0.8, 0.5),
 )
 
 
