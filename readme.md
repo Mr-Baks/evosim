@@ -264,7 +264,8 @@ population. It contains one row per sample with:
   phenotype and `(allele1 + allele2) / 2`, respectively);
 - mean and maximum `Lineage.generation`;
 - mean derived traits from `traits_for(genome)`, including nested speed,
-  metabolism, wear, colour and vision components;
+  metabolism, wear, colour and vision components, plus the food-ranking
+  weights `food_distance_weight` and `food_damage_weight`;
 - spatial aggregates: mean number of creature neighbours within radius 5,
   mean nearest-neighbour distance, and the fraction of creatures with negative
   or positive `crowd_preference`.
@@ -463,11 +464,13 @@ are `200`, `food_saturation` and `partner_saturation` are `3`, and
 If the chosen action is already in `State.states`, the entity is left alone
 (this prevents re-issuing a command that is already running). Otherwise:
 
-1. **eat** – pick the nearest visible `Eatable`, move to a free cell next to it
-   (`MoveToTargetCommand`, emergency 15) and eat (`EatCommand`, emergency 16).
-   Each candidate is skipped with probability `eat_reconsider_chance` (`0.3`).
-   If no candidate is accepted or no free cell exists, wander with
-   `wander_fallback_radius` (`6`).
+1. **eat** – rank visible `Eatable` candidates by their net food utility
+   `nutrition − food_distance_weight · distance − food_damage_weight · damage`
+   (`systems.rate_food`), preferring the highest value and breaking ties by eid.
+   Then move to a free cell next to it (`MoveToTargetCommand`, emergency 15)
+   and eat (`EatCommand`, emergency 16). Each candidate is skipped with
+   probability `eat_reconsider_chance` (`0.3`). If no candidate is accepted or
+   no free cell exists, wander with `wander_fallback_radius` (`6`).
 2. **sleep** – `ticks = round((200 - energy) / 45)` (or `1` if hunger is `0`),
    `SleepCommand(energy_increase=45, emergency=10)`.
 3. **mating** – pick the nearest visible partner, move next to it
@@ -551,6 +554,8 @@ The base scalings are:
 | `crowd_preference` | `Traits.crowd_preference` — negative avoids crowds (raises idle in a crowd), positive prefers them (lowers idle in a crowd) | raw `(-1, 1)` |
 | `plant_appetence` | `Traits.plant_appetence` — attraction to plant cover; idle uses `max(0, plant_appetence)`, point selection only while sated | raw `(-1, 1)` |
 | `food_appetence` | `Traits.food_appetence` — attraction to visible food while starving; `WanderCommand` scores candidate points by it | raw `(-1, 1)` |
+| `food_distance_weight` | `Traits.food_distance_weight` — utility penalty per tile of distance when ranking visible food | `(0, 2)` |
+| `food_damage_weight` | `Traits.food_damage_weight` — utility penalty per unit of damage from rotting food | `(0, 2)` |
 | `mating_*_threshold` | minimum stat to mate | `(0, 200)` |
 | `color_r/g/b` | offspring colour | `(0, 256)` |
 | `vision` | `Traits.vision.radius` / `Traits.vision.metabolic` | `(1, 10)`, log / `(1, 1.25)`, log |
@@ -562,7 +567,8 @@ The base scalings are:
 | `max_health = vitality * 100` | `Traits.max_health(vitality)` |
 | `energy = M² · (0.5 + 0.5D) · speed_metabolic · (2 - vitality) · vision_metabolic · metabolic_cost_scale` | `Traits.energy_drain(vitality)` |
 | `hunger = (L / 710) · (M / 0.5) · speed_metabolic · 0.5 · vision_metabolic · hunger_cost_scale` | `Traits.hunger_drain()` |
-| `hunger_gain = D · nutrition` | `Traits.hunger_gain(nutrition)` |
+| `hunger_gain = D · nutrition · digestibility · (1 - decay)` | `Traits.hunger_gain(nutrition, decay, food_type)` |
+| `food_utility = hunger_gain − food_distance_weight · distance − food_damage_weight · food_damage` | `systems.rate_food(...)` |
 | `cooldown = round(wear_cooldown · (1 - 0.5 · cooldown_modifier))` | `Traits.additional_cooldown()` |
 | `fertility · min(1, vitality·2) · (1 - a/3)` | `Traits.effective_fertility(vitality)` |
 | `regen_increase · M · vitality` | `Traits.regeneration_gain(vitality)` |
@@ -779,6 +785,11 @@ placing fewer entities.
    `derive()` assumes every core gene is present; if a gene is missing,
    `get_phenotype` returns its default (often `None`), which usually breaks the
    physiology formulas. Keep `founder_genes` complete.
+4. Add the gene to `GENE_NAMES` and its derived value to `TRAIT_COLUMNS` and
+   `_trait_values()` in `features.py`, so the new locus appears in
+   `features.csv`, `birth_features.csv` and `matrix.json`.
+5. Add a test for the scaling/effect. If the gene changes a decision rule,
+   test that rule directly (see `tests/test_food_ranking.py`).
 
 ### Add a New Event
 
@@ -810,8 +821,11 @@ that already contains a `logs/` folder (`tests/conftest.py`). Notable files:
 - `tests/test_config.py` – config validation/roundtrip, genome-derived founder
   components, and founder jitter (same delta per locus, colour genes excluded,
   boundary handling, independent founders).
+- `tests/test_food_ranking.py` – scaling and defaults of the food-ranking
+  genes, plus the distance and rot-damage penalties used by `rate_food`.
 - `tests/test_features.py` – stable feature header, empty-population rows and
-  living-population aggregation for the fixed gene/trait matrix.
+  living-population aggregation for the fixed gene/trait matrix, including the
+  food-ranking genes.
 - `tests/test_experiment_runner.py` – runner smoke test, `matrix.json` contents,
   feature CSV shape, config overrides and parallel-vs-serial determinism.
 - `tests/test_aggregate.py` – seed-level aggregation, 95% CI, generation-bin

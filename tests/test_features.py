@@ -10,6 +10,7 @@ from features import (
     log_birth_features,
     log_features,
 )
+from genome import GeneNames
 from tests.helpers import default_genes
 from world import World
 import main
@@ -29,6 +30,34 @@ def test_feature_header_is_stable():
     trait_start = 2 + 2 * len(GENE_NAMES) + 2
     assert header[trait_start:trait_start + len(TRAIT_COLUMNS)] == list(TRAIT_COLUMNS)
     assert header[-len(AGGREGATE_COLUMNS):] == list(AGGREGATE_COLUMNS)
+
+
+def test_feature_schema_includes_food_ranking_genes_and_traits():
+    assert GeneNames.FOOD_DISTANCE_WEIGHT in GENE_NAMES
+    assert GeneNames.FOOD_DAMAGE_WEIGHT in GENE_NAMES
+    assert 'food_distance_weight' in TRAIT_COLUMNS
+    assert 'food_damage_weight' in TRAIT_COLUMNS
+    assert feature_header().count('food_distance_weight') == 1
+    assert feature_header().count('food_damage_weight') == 1
+
+
+def test_log_features_reports_food_ranking_traits():
+    world = World(5, 5)
+    genome = default_genes(**{
+        GeneNames.FOOD_DISTANCE_WEIGHT: 0.0,
+        GeneNames.FOOD_DAMAGE_WEIGHT: 1.0,
+    })
+    entity = Entity().add_component(Movable()).add_component(genome)
+    world.place_entity(entity, 2, 2)
+
+    row = dict(zip(feature_header(), log_features(world, 1)))
+
+    assert row['gene_food_distance_weight_phenotype'] == pytest.approx(0.0)
+    assert row['gene_food_distance_weight_allele'] == pytest.approx(0.0)
+    assert row['food_distance_weight'] == pytest.approx(1.0)
+    assert row['gene_food_damage_weight_phenotype'] == pytest.approx(1.0)
+    assert row['gene_food_damage_weight_allele'] == pytest.approx(1.0)
+    assert row['food_damage_weight'] == pytest.approx(2.0)
 
 
 def test_feature_matrix_flattens_metabolism_pleiotropy():
