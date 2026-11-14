@@ -27,10 +27,12 @@ class Simulation:
         """Runs all systems in priority order and flushes pending changes"""
         self.world.index.sort_cache()
         self.world.index.locked = True
-        for _, req_comps, system in self.systems:
-            system(self.world.index.systems_cache[req_comps], self.world)
-        self.world.index.locked = False
-        self.world.flush_pending()
+        try:
+            for _, req_comps, system in self.systems:
+                system(self.world.index.systems_cache[req_comps], self.world)
+        finally:
+            self.world.index.locked = False
+            self.world.flush_pending()
 
     def add_on_tick(self, callback: callable) -> None:
         """Registers a callback invoked after each tick"""
