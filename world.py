@@ -43,19 +43,25 @@ class QueryIndex:
         if self.locked:
             if entity in self.pending_addition:
                 self.pending_addition.remove(entity)
-            else:
+            elif entity not in self.pending_removal:
                 self.pending_removal.append(entity)
             return
 
         if entity in self.entities:
             self.entities.remove(entity)
         entity.locked_direct_operation = False
+
         for c in entity.components:
-            self.component_index[c].remove(entity)
-        
-        for key in self.systems_cache:
-            if entity in self.systems_cache[key]:
-                self.systems_cache[key].remove(entity)
+            bucket = self.component_index.get(c)
+            if bucket is not None and entity in bucket:
+                bucket.remove(entity)
+
+        for cache in self.systems_cache.values():
+            if entity in cache:
+                cache.remove(entity)
+
+        self.component_index_dirty = True
+        self.systems_cache_dirty = True
 
     def sort_cache(self):
         """Sorts dirty component and system caches by entity id"""
@@ -154,18 +160,37 @@ class World:
         
         self.cells[y][x] = entity
         entity.x, entity.y = x, y
+        if entity.eid is None:
+            entity.eid = self._eid_counter
+            self._eid_counter += 1
         self.index.add_entity(entity)
-        entity.eid = self._eid_counter
-        self._eid_counter += 1
 
         return True
 
     def remove_entity(self, entity: Entity) -> Optional[Entity]:
         """Removes an entity from the grid and index"""
+        removed = False
         if self.get_entity(entity.x, entity.y) is entity:
-            self.index.remove_entity(entity)
             self.cells[entity.y][entity.x] = None
+            removed = True
+
+        if entity in self.index.entities or removed:
+            self.index.remove_entity(entity)
             return entity
+
+    def get_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
+        """Returns all in-bounds cells within the given radius"""
+        cells = []
+        x, y = entity.x, entity.y
+
+        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
+            nx = x + dx
+            if not 0 <= nx < self.width:
+                continue
+            for ny in range(max(0, y + dy_lo), min(self.height, y + dy_hi + 1)):
+                cells.append((nx, ny))
+
+        return cells
 
     def _get_offsets(self, radius: int) -> list[tuple[int, int]]:
         if radius in self._offset_cache:
@@ -284,17 +309,6 @@ class World:
         free_cells = self.get_free_cells_near(entity, radius)
         return random.choice(free_cells) if free_cells else None
     
-    def get_cells_near(self, entity: Entity, radius: int = 1) -> list[tuple[int, int]]:
-        """Returns all cells within the given radius"""
-        cells = []
-        x, y = entity.x, entity.y
-
-        for dx, dy_lo, dy_hi in self._get_column_offsets(radius):
-            for ny in range(y + dy_lo, y + dy_hi + 1):
-                cells.append((x + dx, ny))
-
-        return cells
-
     def add_component(self, entity, component):
         """Adds a component through the world index"""
         if self.index.locked:
