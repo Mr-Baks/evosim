@@ -1,5 +1,5 @@
 from event_bus import Event, EventBus, MoveEvent, SleepEvent, EatEvent, on_move, on_sleep, on_eat
-from entity import Entity, Biochemistry
+from entity import Entity, Biochemistry, Eatable
 from genome import GeneNames
 from tests.helpers import default_genes
 
@@ -133,11 +133,12 @@ class TestSleepEvent:
 class TestEatEvent:
     def test_eat_event_defaults(self):
         e = EatEvent()
-        assert e.nutrition == 35
+        assert e.eatable.nutrition == 30
+        assert e.eatable.decay == 0
 
     def test_eat_event_custom(self):
-        e = EatEvent(nutrition=20)
-        assert e.nutrition == 20
+        e = EatEvent(eatable=Eatable(nutrition=20))
+        assert e.eatable.nutrition == 20
 
 
 class TestEventHandlers:
@@ -177,7 +178,7 @@ class TestEventHandlers:
 
     def test_on_eat_increases_hunger(self):
         ent = Entity().add_component(Biochemistry(hunger=50))
-        event = EatEvent(source=ent, nutrition=30)
+        event = EatEvent(source=ent, eatable=Eatable(nutrition=30))
         on_eat(event)
         assert ent.get_component(Biochemistry).hunger == 80
 
@@ -185,19 +186,19 @@ class TestEventHandlers:
         ent = (Entity()
                .add_component(Biochemistry(hunger=50))
                .add_component(default_genes(**{GeneNames.METABOLISM: 1.0})))
-        event = EatEvent(source=ent, nutrition=20)
+        event = EatEvent(source=ent, eatable=Eatable(nutrition=20))
         on_eat(event)
         assert ent.get_component(Biochemistry).hunger == 80
 
     def test_on_eat_without_genome_uses_raw_nutrition(self):
         ent = Entity().add_component(Biochemistry(hunger=50))
-        event = EatEvent(source=ent, nutrition=20)
+        event = EatEvent(source=ent, eatable=Eatable(nutrition=20))
         on_eat(event)
         assert ent.get_component(Biochemistry).hunger == 70
 
     def test_on_eat_hunger_capped_at_200(self):
         ent = Entity().add_component(Biochemistry(hunger=180))
-        event = EatEvent(source=ent, nutrition=50)
+        event = EatEvent(source=ent, eatable=Eatable(nutrition=50))
         on_eat(event)
         assert ent.get_component(Biochemistry).hunger == 200
 

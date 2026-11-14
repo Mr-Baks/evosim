@@ -5,7 +5,7 @@ from systems import *
 from commands import *
 from entity import *
 from world import World
-from event_bus import EventBus, on_eat, on_move, on_sleep
+from event_bus import DamageEvent, EventBus, on_damage, on_eat, on_move, on_sleep
 from genome import Genome, GeneNames
 from traits import traits_for
 from tests.helpers import (
@@ -150,14 +150,18 @@ class TestBiochemistrySystem:
         assert old_drain > young_drain
 
     def test_biochemistry_system_energy_zero_health_decay(self):
-        e = Entity().add_component(Biochemistry(energy=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
+        # Start below max health so the age-based vitality cap does not mask
+        # the health_decay applied for zero energy.
+        e = Entity().add_component(Biochemistry(energy=0, health=90)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
         w = World(10, 10)
+        w.event_bus.subscribe(DamageEvent, on_damage)
         w.place_entity(e, 5, 5)
 
         biochemistry_system({e}, w)
+        w.event_bus.dispatch()
 
         bio = e.get_component(Biochemistry)
-        assert bio.health == 99
+        assert bio.health == pytest.approx(89.0)
 
     def test_biochemistry_system_hunger_drain_scales_with_lifespan(self):
         w = World(10, 10)
@@ -200,14 +204,18 @@ class TestBiochemistrySystem:
         assert scaled_hunger == pytest.approx(base_hunger * 0.5)
 
     def test_biochemistry_system_hunger_zero_health_decay(self):
-        e = Entity().add_component(Biochemistry(hunger=0, health=100)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
+        # Start below max health so the age-based vitality cap does not mask
+        # the health_decay applied for zero hunger.
+        e = Entity().add_component(Biochemistry(hunger=0, health=90)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())
         w = World(10, 10)
+        w.event_bus.subscribe(DamageEvent, on_damage)
         w.place_entity(e, 5, 5)
 
         biochemistry_system({e}, w)
+        w.event_bus.dispatch()
 
         bio = e.get_component(Biochemistry)
-        assert bio.health == 99
+        assert bio.health == pytest.approx(89.0)
 
     def test_biochemistry_system_health_zero_death_command(self):
         e = Entity().add_component(Biochemistry(health=0)).add_component(CommandQueue()).add_component(Movable()).add_component(default_genes())

@@ -198,8 +198,8 @@ class TestFormulas:
     def test_digestion_trades_satiety_for_maintenance(self):
         efficient = derive(genome_at(1.0))
         inefficient = derive(genome_at(-1.0))
-        assert efficient.hunger_gain(20) == pytest.approx(30.0)
-        assert inefficient.hunger_gain(20) == pytest.approx(10.0)
+        assert efficient.hunger_gain(20, 0.0, None) == pytest.approx(30.0)
+        assert inefficient.hunger_gain(20, 0.0, None) == pytest.approx(10.0)
         assert efficient.energy_drain(1.0) > inefficient.energy_drain(1.0)
 
     def test_additional_cooldown_scales_with_metabolism(self):
