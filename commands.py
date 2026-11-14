@@ -5,6 +5,7 @@ from entity import Entity, State, Render, Movable, Biochemistry, Eatable, Breeda
 from world import World
 from event_bus import EatEvent, SleepEvent, DeathEvent, MoveEvent, BirthEvent, DamageEvent
 import math
+import os
 import random
 import heapq
 from typing import Optional
@@ -47,6 +48,7 @@ class Command(ABC):
         state = entity.get_component(State)
 
         if status == CommandStatus.FAILED:
+            os.makedirs('logs', exist_ok=True)
             with open('logs/error_log.txt', 'a') as log:
                 log.write(f'Command {type(self)} failed | current state: {state.current if state else 'no state'} \n')
         
@@ -495,11 +497,23 @@ def create_child(parent1: Entity, parent2: Entity, world: World):
 class MateCommand(Command): 
     partner: Entity = None
 
+    def _partner_is_valid(self, world: World) -> bool:
+        """Returns True while the partner is still alive in the world"""
+        return self.partner is not None and world.get_entity(self.partner.x, self.partner.y) is self.partner
+
     def is_ready(self, entity, world):
         """Checks whether both partners are adjacent and ready"""
-        if abs(entity.x - self.partner.x) > 1 or abs(entity.y - self.partner.y) > 1 or self.partner.get_component(Breedable).cooldown > 0 or entity.get_component(Breedable).cooldown > 0:
+        if not self._partner_is_valid(world):
             return False
-        return True
+
+        partner_breedable: Breedable = self.partner.get_component(Breedable)
+        own_breedable: Breedable = entity.get_component(Breedable)
+        if partner_breedable is None or own_breedable is None:
+            return False
+
+        if abs(entity.x - self.partner.x) > 1 or abs(entity.y - self.partner.y) > 1:
+            return False
+        return partner_breedable.cooldown <= 0 and own_breedable.cooldown <= 0
 
     def execute(self, entity, world):
         """Mates with the partner and places the child nearby"""
@@ -509,7 +523,11 @@ class MateCommand(Command):
         bio2: Biochemistry = self.partner.get_component(Biochemistry)
         lineage1: Lineage = entity.get_component(Lineage)
         lineage2: Lineage = self.partner.get_component(Lineage)
-        
+
+        if not self._partner_is_valid(world) or None in (genome1, genome2, bio1, bio2):
+            self.complete(entity, status=CommandStatus.FAILED)
+            return
+
         child = create_child(entity, self.partner, world)
         free_cell = world.get_free_cell_near(entity)
 
