@@ -7,6 +7,7 @@ from traits import traits_for, Traits
 from genome import Genome
 from event_bus import DamageEvent
 from commands import octile
+import os
 import random
 
 
@@ -26,9 +27,8 @@ def command_system(entities: set[Entity], world: World):
                         state.current = c.target_state
                     queue.queue.remove(c)
                     break
-        if command: 
+        if command:
             command.execute(e, world)
-        if len(queue.queue) > 25: print('LEAK')
 
 def vision_system(entities: set[Entity], world: World):
     """Rebuilds each entity's visible entities and category cache"""
@@ -69,7 +69,8 @@ def biochemistry_system(entities: set[Entity], world: World):
             creatures_count = world.count_components_near(e.x, e.y, (Movable,), radius=world.balance.crowd_radius, exclude=e)[0]
 
         if creatures_count >= world.balance.crowd_count_threshold:
-            normalized = (creatures_count - world.balance.crowd_count_threshold) / (world.balance.max_crowd_count - world.balance.crowd_count_threshold)
+            crowd_range = world.balance.max_crowd_count - world.balance.crowd_count_threshold
+            normalized = (creatures_count - world.balance.crowd_count_threshold) / crowd_range if crowd_range > 0 else 1.0
             crowd_penalty = min(normalized, 1.0) * world.balance.max_crowd_penalty_factor
         else:
             crowd_penalty = 0
@@ -226,6 +227,7 @@ def logging_system(entities: set[Entity], world: World):
         log += f'   Energy: {bio.energy:.2f} | hunger: {bio.hunger:.2f} | health: {bio.health:.2f} | age: {bio.age:.2f} | vitality: {bio.vitality:.2f}\n'
         log += f'   Utilities: {uts}\n'
 
+    os.makedirs('logs', exist_ok=True)
     with open('logs/last_tick.txt', 'w+') as l:
         l.write(log)
 
@@ -327,4 +329,3 @@ def decay_system(entities: list[Entity], world: World):
                 continue
                 
             eatable.decay += corpse_decay_increase
-
