@@ -1,5 +1,10 @@
 # EvoSim
 
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Tests](https://github.com/Mr-Baks/evosim/actions/workflows/tests.yml/badge.svg)](https://github.com/Mr-Baks/evosim/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![Dependencies: none](https://img.shields.io/badge/runtime_deps-none-2ea44f?style=for-the-badge)](requirements-dev.txt)
+
 A turn-based, grid-based evolution simulation where creatures with genetics and
 biochemistry roam, eat, sleep, reproduce and die. Built with a custom ECS-like
 architecture, command-queue system, event bus, A* pathfinding, and
